@@ -91,7 +91,7 @@ def training(args, dataset, opt, pipe, saving_iterations):
         #     rendered_feature = torch.cat([rendered_feature, depth], dim=0)
         # instance_feature = gaussians.instance_feature_decoder(rendered_feature[None])[0]
         h, w = rendered_feature.shape[1:]
-        instance_masks = mask_dataset.instance_masks[index].reshape(h * w)
+        instance_masks = mask_dataset.instance_masks[viewpoint_cam.image_name].reshape(h * w)
         instance_feature = F.normalize(rendered_feature.reshape(-1, h * w).permute(1, 0), dim=-1)
         # instance_feature = instance_feature.reshape(-1, h * w).permute(1, 0)
 

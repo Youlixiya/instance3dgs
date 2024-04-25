@@ -2,14 +2,14 @@
 CUDA_VISIBLE_DEVICES=4 python train_gs.py --source_path data/ovs3d/sofa --images images_4 --model_path output/ovs3d/sofa
 
 CUDA_VISIBLE_DEVICES=4 python mask_refine.py --src_path data/ovs3d/sofa/masks_4 --refine_path data/ovs3d/sofa/gundam
+CUDA_VISIBLE_DEVICES=4 python mask_refine.py --src_path data/ovs3d/sofa/masks_4 --refine_path data/ovs3d/sofa/gray_sofa
 CUDA_VISIBLE_DEVICES=4 python train.py --gs_source output/ovs3d/sofa/point_cloud/iteration_10000/point_cloud.ply --colmap_dir data/ovs3d/sofa --images images_4
-python test_nvos.py --cfg_path scripts/batch_contrastive_nvos_test_config.json  --scene fern --images images_4
-python test_nvos.py --cfg_path scripts/queue_contrastive_llff_test_config.json  --scene fern --images images_4
-python test_nvos.py --cfg_path scripts/global_contrastive_llff_test_config.json  --scene fern --images images_4
+CUDA_VISIBLE_DEVICES=4 python test_ovs3d.py --cfg_path scripts/16_ovs3d_test_config.json  --scene sofa --images images_4
+
 
 #bed
 CUDA_VISIBLE_DEVICES=4 python train_gs.py --source_path data/ovs3d/bed --images images_4 --model_path output/ovs3d/bed
-CUDA_VISIBLE_DEVICES=4 python train.py --gs_source output/ovs3d/bed/point_cloud/iteration_10000/point_cloud.ply --colmap_dir data/ovs3d/bed --images images_4
+CUDA_VISIBLE_DEVICES=5 python train.py --gs_source output/ovs3d/bed/point_cloud/iteration_10000/point_cloud.ply --colmap_dir data/ovs3d/bed --images images_4
 CUDA_VISIBLE_DEVICES=1 python train.py --gs_source output/llff/flower/point_cloud/iteration_5000/point_cloud.ply --colmap_dir data/nerf_llff_data/flower --images images_4 --queue_contrastive
 CUDA_VISIBLE_DEVICES=1 python train.py --gs_source output/llff/flower/point_cloud/iteration_5000/point_cloud.ply --colmap_dir data/nerf_llff_data/flower --images images_4 --global_contrastive
 
@@ -41,7 +41,7 @@ CUDA_VISIBLE_DEVICES=2 python train.py --gs_source output/llff/fortress/point_cl
 CUDA_VISIBLE_DEVICES=2 python train.py --gs_source output/llff/fortress/point_cloud/iteration_10000/point_cloud.ply --colmap_dir data/nerf_llff_data/fortress --images images_4 --no_cache
 CUDA_VISIBLE_DEVICES=2 python train.py --gs_source output/llff/fortress/point_cloud/iteration_10000/point_cloud.ply --colmap_dir data/nerf_llff_data/fortress --images images_4 --queue_contrastive
 CUDA_VISIBLE_DEVICES=2 python train.py --gs_source output/llff/fortress/point_cloud/iteration_10000/point_cloud.ply --colmap_dir data/nerf_llff_data/fortress --images images_4 --global_contrastive --instance_feature_dim 8
-
+CUDA_VISIBLE_DEVICES=4 python test_ovs3d.py --cfg_path scripts/16_ovs3d_test_config.json  --scene bench --images images_4
 
 CUDA_VISIBLE_DEVICES=2 python train.py --gs_source output/llff/fortress/point_cloud/iteration_10000/point_cloud.ply --colmap_dir data/nerf_llff_data/fortress --images images_4
 CUDA_VISIBLE_DEVICES=2 python train.py --gs_source output/llff/fortress/point_cloud/iteration_10000/point_cloud.ply --colmap_dir data/nerf_llff_data/fortress --images images_4 --queue_contrastive
@@ -54,7 +54,7 @@ python test_nvos.py --cfg_path scripts/global_contrastive_llff_test_config.json 
 #lawn
 CUDA_VISIBLE_DEVICES=5 python train_gs.py --source_path data/ovs3d/lawn --images images_4 --model_path output/ovs3d/lawn
 
-CUDA_VISIBLE_DEVICES=3 python train.py --gs_source output/llff/horns/point_cloud/iteration_5000/point_cloud.ply --colmap_dir data/nerf_llff_data/horns --images images_4
+CUDA_VISIBLE_DEVICES=5 python train.py --gs_source output//ovs3d/lawn/point_cloud/iteration_10000/point_cloud.ply --colmap_dir data//ovs3d/lawn --images images_4
 CUDA_VISIBLE_DEVICES=3 python train.py --gs_source output/llff/horns/point_cloud/iteration_5000/point_cloud.ply --colmap_dir data/nerf_llff_data/horns --images images_4 --queue_contrastive
 CUDA_VISIBLE_DEVICES=3 python train.py --gs_source output/llff/horns/point_cloud/iteration_5000/point_cloud.ply --colmap_dir data/nerf_llff_data/horns --images images_4 --global_contrastive
 
@@ -77,10 +77,13 @@ python test_nvos.py --cfg_path scripts/batch_contrastive_llff_test_config.json  
 python test_nvos.py --cfg_path scripts/queue_contrastive_llff_test_config.json  --scene horns_left --images images_4
 python test_nvos.py --cfg_path scripts/global_contrastive_llff_test_config.json  --scene horns_left --images images_4
 
-#leaves
-CUDA_VISIBLE_DEVICES=4 python train_gs.py --source_path data/nerf_llff_data/leaves --images images_4 --model_path output/llff/leaves
+#room
+CUDA_VISIBLE_DEVICES=4 python train_gs.py --source_path data/ovs3d/room --images images_4 --model_path output/ovs3d/room
 
-CUDA_VISIBLE_DEVICES=4 python train.py --gs_source output/llff/leaves/point_cloud/iteration_5000/point_cloud.ply --colmap_dir data/nerf_llff_data/leaves --images images_4
+CUDA_VISIBLE_DEVICES=4 python train.py --gs_source output/ovs3d/room/point_cloud/iteration_10000/point_cloud.ply --colmap_dir data/ovs3d/room --images images_4
+CUDA_VISIBLE_DEVICES=4 python mask_refine.py --src_path data/ovs3d/room/masks_4 --refine_path data/ovs3d/room/background
+
+
 CUDA_VISIBLE_DEVICES=4 python train.py --gs_source output/llff/leaves/point_cloud/iteration_5000/point_cloud.ply --colmap_dir data/nerf_llff_data/leaves --images images_4 --queue_contrastive
 CUDA_VISIBLE_DEVICES=4 python train.py --gs_source output/llff/leaves/point_cloud/iteration_5000/point_cloud.ply --colmap_dir data/nerf_llff_data/leaves --images images_4 --global_contrastive
 

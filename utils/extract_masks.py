@@ -114,6 +114,12 @@ class MaskDataset(Dataset):
             # self.clip_embeddings.append(tmp_clip_embedding)
         
         self.instance_masks = self.instance_masks.long()
+        instance_masks = {}
+        for i in range(len(self.masks_name)):
+            mask_name = self.masks_name[i].split('.')[0]
+            instance_masks[mask_name] = self.instance_masks[i]
+        self.instance_masks = instance_masks
+
         # self.semantic_masks = self.semantic_masks.long()
         # self.semantic_colors = torch.stack(self.semantic_colors)
         # self.clip_embeddings = torch.stack(self.clip_embeddings)
