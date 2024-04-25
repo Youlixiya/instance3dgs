@@ -32,8 +32,6 @@ from utils.general_utils import (
 from gaussian_renderer import camera2rasterizer
 
 from knn import K_nearest_neighbors
-from utils.mesh import Mesh
-from utils.mesh_utils import decimate_mesh, clean_mesh
 from scene.feature_model import Codebook, MLP, semanticTable
 
 # from threestudio.utils.typing import Bool, Tensor
