@@ -40,6 +40,7 @@ class CamScene:
 
         self.cameras_extent = scene_info.nerf_normalization["radius"]
         self.cameras = cameraList_load(scene_info.train_cameras, h, w)
+        self.eval_cameras = cameraList_load(scene_info.test_cameras, h, w)
 
     def save(self, iteration):
         point_cloud_path = os.path.join(self.model_path, "point_cloud/iteration_{}".format(iteration))

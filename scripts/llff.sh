@@ -1,7 +1,7 @@
 #fern
 CUDA_VISIBLE_DEVICES=0 python train_gs.py --source_path data/nerf_llff_data/fern --images images_4 --model_path output/llff/fern
 
-CUDA_VISIBLE_DEVICES=0 python train.py --gs_source output/llff/fern/point_cloud/iteration_5000/point_cloud.ply --colmap_dir data/nerf_llff_data/fern --images images_4
+CUDA_VISIBLE_DEVICES=0 python train.py --gs_source output/llff/fern/point_cloud/iteration_10000/point_cloud.ply --colmap_dir data/nerf_llff_data/fern --images images_4
 CUDA_VISIBLE_DEVICES=0 python train.py --gs_source output/llff/fern/point_cloud/iteration_5000/point_cloud.ply --colmap_dir data/nerf_llff_data/fern --images images_4 --queue_contrastive
 CUDA_VISIBLE_DEVICES=0 python train.py --gs_source output/llff/fern/point_cloud/iteration_5000/point_cloud.ply --colmap_dir data/nerf_llff_data/fern --images images_4 --global_contrastive
 
@@ -16,9 +16,7 @@ CUDA_VISIBLE_DEVICES=0 python train.py --gs_source output/llff/fern/point_cloud/
 CUDA_VISIBLE_DEVICES=0 python train.py --gs_source output/llff/fern/point_cloud/iteration_10000/point_cloud.ply --colmap_dir data/nerf_llff_data/fern --images images_4 --queue_contrastive
 CUDA_VISIBLE_DEVICES=0 python train.py --gs_source output/llff/fern/point_cloud/iteration_10000/point_cloud.ply --colmap_dir data/nerf_llff_data/fern --images images_4 --global_contrastive --depth_decode
 python viewer.py --gs_source output/llff/fern/point_cloud/iteration_10000/point_cloud.ply  --colmap_dir data/nerf_llff_data/fern --feature_gs_source output/llff/fern/point_cloud/iteration_10000/16_feature_gs_10000.pt --images images_4 --lisa
-python test_nvos.py --cfg_path scripts/batch_contrastive_nvos_test_config.json  --scene fern --images images_4
-python test_nvos.py --cfg_path scripts/queue_contrastive_llff_test_config.json  --scene fern --images images_4
-python test_nvos.py --cfg_path scripts/global_contrastive_llff_test_config.json  --scene fern --images images_4
+python test_llff.py --cfg_path scripts/16_llff_test_config.json  --scene fern --images images_4
 
 #flower
 CUDA_VISIBLE_DEVICES=1 python train_gs.py --source_path data/nerf_llff_data/flower --images images_4 --model_path output/llff/flower
