@@ -23,6 +23,7 @@ from utils.color import generate_contrasting_colors
 from utils.general_utils import AttrDict
 from argparse import ArgumentParser
 from arguments import ModelParams, PipelineParams, get_combined_args
+from lisa.lisa_pipeline import LISAPipeline
 
 COLORS = torch.tensor(generate_contrasting_colors(500), dtype=torch.uint8, device='cuda')
 
@@ -50,7 +51,7 @@ def instance_segmentation(image, gaussian, instance_embeddings, render_instance_
     instance_object_map[~masks_all_instance, :] = torch.tensor([1, 1, 1], dtype=torch.float32, device=device)
     
     return masks_all_instance, instance_mask_map, instance_object_map
-def template(prompt):
+def qwen_template(prompt):
     return f'Please grounding <ref> {prompt} </ref>'
 def extract_box(text, w, h):
     pattern = r'\((.*?)\)'
@@ -143,6 +144,9 @@ if __name__ == '__main__':
     pipe = PipelineParams(parser)
     parser.add_argument("--cfg_path", type=str, required=True)
     parser.add_argument("--scene", type=str, required=True)
+    parser.add_argument("--lisa", action='store_true')
+    parser.add_argument("--lisa_model_type", type=str, default="xinlai/LISA-13B-llama2-v1-explanatory")
+    parser.add_argument("--lisa_conv_type", type=str, default="llava_llama_2")
     args = parser.parse_args()
     with open(args.cfg_path, 'r') as f:
         cfg = AttrDict(json.load(f)[args.scene])
@@ -174,11 +178,15 @@ if __name__ == '__main__':
         img_suffix = os.listdir(os.path.join(args.colmap_dir, args.images))[0].split('.')[-1]
         imgs_name = [f'{camera.image_name}.{img_suffix}' for camera in colmap_cameras]
         imgs_path = [os.path.join(args.colmap_dir, args.images, img_name) for img_name in imgs_name]
-    for i, img in enumerate(imgs_name):
-        if args.image_name == img:
-            break
-    cam = colmap_cameras.pop(i)
-    save_path = os.path.join(args.save_path, args.reasoning_prompt)
+    # for i, img in enumerate(imgs_name):
+    #     if args.image_name == img:
+    #         break
+    # cam = colmap_cameras.pop(i)
+    if args.lisa:
+        lisa_pipeline = LISAPipeline(args.lisa_model_type, local_rank=0, load_in_4bit=False, load_in_8bit=True, conv_type=args.lisa_conv_type)
+        save_path = os.path.join(args.save_path, 'lisa', args.reasoning_prompt)
+    else:
+        save_path = os.path.join(args.save_path, args.reasoning_prompt)
     os.makedirs(save_path, exist_ok=True)
     instance_embeddings = None
     rendered_feature_pca_dict = None
@@ -205,17 +213,20 @@ if __name__ == '__main__':
                 rendered_feature_pca_dict = get_pca_dict(render_feature)
             if instance_feature_pca_dict is None:
                 instance_feature_pca_dict = get_pca_dict(instance_feature)
-            if instance_embeddings is None:
-                reasoning_prompt = template(args.reasoning_prompt)
-                image.save('tmp.jpg')
-                tmp_image_path = os.path.join(os.getcwd(), 'tmp.jpg')
-                answer, box = reasoning_grouding_by_qwen(tmp_image_path, reasoning_prompt)
-                reasoning_result = draw_rectangle(image, [box])
-                reasoning_result.save(os.path.join(args.save_path, 'reasoning_result.jpg'))
-                instance_embeddings = get_instance_embeddings(gaussian, box, instance_feature)
+            if args.lisa:
+                result_list, mask_result_list, mask_list, mask_rgb_list, output_str = lisa_pipeline(lisa_text_prompt, image=image)
+            else:
+                if instance_embeddings is None:
+                    reasoning_prompt = qwen_template(args.reasoning_prompt)
+                    image.save('tmp.jpg')
+                    tmp_image_path = os.path.join(os.getcwd(), 'tmp.jpg')
+                    answer, box = reasoning_grouding_by_qwen(tmp_image_path, reasoning_prompt)
+                    reasoning_result = draw_rectangle(image, [box])
+                    reasoning_result.save(os.path.join(args.save_path, 'reasoning_result.jpg'))
+                    instance_embeddings = get_instance_embeddings(gaussian, box, instance_feature)
             masks_all_instance, instance_mask_map, instance_object_map = instance_segmentation(image_tensor, gaussian, instance_embeddings, instance_feature, args.mask_threshold, device='cuda')
             Image.fromarray((apply_colormap(render_feature.permute(1, 2, 0), ColormapOptions(colormap="pca", pca_dict=rendered_feature_pca_dict)).cpu().numpy() * 255).astype(np.uint8)).save(os.path.join(rendered_feature_save_path, f'{cam.image_name}.png'))
             Image.fromarray((apply_colormap(instance_feature.permute(1, 2, 0), ColormapOptions(colormap="pca", pca_dict=instance_feature_pca_dict)).cpu().numpy() * 255).astype(np.uint8)).save(os.path.join(instance_feature_save_path, f'{cam.image_name}.png'))
-            Image.fromarray(np.stack([(masks_all_instance.cpu().numpy() * 255).astype(np.uint8)] * 3, axis=-1)).save(os.path.join(mask_save_path, f'{cam.image_name}.png'))
+            Image.fromarray((masks_all_instance.cpu().numpy() * 255).astype(np.uint8), mode='L').save(os.path.join(mask_save_path, f'{cam.image_name}.png'))
             Image.fromarray((instance_mask_map.clamp(0, 1).cpu().numpy() * 255).astype(np.uint8)).save(os.path.join(mask_map_save_path, f'{cam.image_name}.png'))
             Image.fromarray((instance_object_map.clamp(0, 1).cpu().numpy() * 255).astype(np.uint8)).save(os.path.join(mask_object_save_path, f'{cam.image_name}.png'))

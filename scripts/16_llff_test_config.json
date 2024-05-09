@@ -5,9 +5,7 @@
         "feature_gs_source": "output/llff/fern/point_cloud/iteration_10000/16_feature_gs_10000.pt",
         "gs_feature_dim": 16,
         "images": "images_4",
-        "image_name": "IMG_4027.JPG",
         "save_path": "output/16_llff_masks/fern",
-        "mask_save_name": "IMG_4027_mask.png",
         "mask_threshold": 0.80,
         "reasoning_prompt": "the biggest tree"
     },
@@ -17,11 +15,9 @@
         "feature_gs_source": "output/llff/flower/point_cloud/iteration_10000/16_feature_gs_10000.pt",
         "gs_feature_dim": 16,
         "images": "images_4",
-        "image_name": "IMG_2962.JPG",
-        "save_path": "output/16_nvos_masks/flower",
-        "mask_save_name": "IMG_2962_mask.png",
+        "save_path": "output/16_llff_masks/flower",
         "mask_threshold": 0.75,
-        "points": [[342, 747]]
+        "reasoning_prompt": "what looks the most colorful"
     },
     "fortress":{
         "gs_source": "output/llff/fortress/point_cloud/iteration_10000/point_cloud.ply",
@@ -29,35 +25,19 @@
         "feature_gs_source": "output/llff/fortress/point_cloud/iteration_10000/16_feature_gs_10000.pt",
         "gs_feature_dim": 16,
         "images": "images_4",
-        "image_name": "IMG_1800.JPG",
-        "save_path": "output/16_nvos_masks/fortress",
-        "mask_save_name": "IMG_1800_mask.png",
+        "save_path": "output/16_llff_masks/fortress",
         "mask_threshold": 0.5,
-        "points": [[395, 749]]
+        "reasoning_prompt": "what seems to be made of metal"
     },
-    "horns_center":{
+    "horns":{
         "gs_source": "output/llff/horns/point_cloud/iteration_10000/point_cloud.ply",
         "colmap_dir": "data/nerf_llff_data/horns",
         "feature_gs_source": "output/llff/horns/point_cloud/iteration_10000/16_feature_gs_10000.pt",
         "gs_feature_dim": 16,
         "images": "images_4",
-        "image_name": "DJI_20200223_163024_597.jpg",
-        "save_path": "output/16_nvos_masks/horns_center",
-        "mask_save_name": "DJI_20200223_163024_597_mask.png",
+        "save_path": "output/16_llff_masks/horns",
         "mask_threshold": 0.65,
-        "points": [[310, 512]]
-    },
-    "horns_left":{
-        "gs_source": "output/llff/horns/point_cloud/iteration_10000/point_cloud.ply",
-        "colmap_dir": "data/nerf_llff_data/horns",
-        "feature_gs_source": "output/llff/horns/point_cloud/iteration_10000/16_feature_gs_10000.pt",
-        "gs_feature_dim": 16,
-        "images": "images_4",
-        "image_name": "DJI_20200223_163024_597.jpg",
-        "save_path": "output/16_nvos_masks/horns_left",
-        "mask_save_name": "DJI_20200223_163024_597_mask.png",
-        "mask_threshold": 0.65,
-        "points": [[386, 145]]
+        "reasoning_prompt": "which is the biggest skeleton"
     },
     "leaves":{
         "gs_source": "output/llff/leaves/point_cloud/iteration_10000/point_cloud.ply",
@@ -65,11 +45,9 @@
         "feature_gs_source": "output/llff/leaves/point_cloud/iteration_10000/16_feature_gs_10000.pt",
         "gs_feature_dim": 16,
         "images": "images_4",
-        "image_name": "IMG_2997.JPG",
-        "save_path": "output/16_nvos_masks/leaves",
-        "mask_save_name": "IMG_2997_mask.png",
+        "save_path": "output/16_llff_masks/leaves",
         "mask_threshold": 0.85,
-        "points": [[562, 709]]
+        "reasoning_prompt": "which is the largest leaf"
     },
     "orchids":{
         "gs_source": "output/llff/orchids/point_cloud/iteration_10000/point_cloud.ply",
@@ -77,22 +55,18 @@
         "feature_gs_source": "output/llff/orchids/point_cloud/iteration_10000/16_feature_gs_10000.pt",
         "gs_feature_dim": 16,
         "images": "images_4",
-        "image_name": "IMG_4480.JPG",
-        "save_path": "output/16_nvos_masks/orchids",
-        "mask_save_name": "IMG_4480_mask.png",
+        "save_path": "output/16_llff_masks/orchids",
         "mask_threshold": 0.90,
-        "points": [[247, 348], [144, 382], [334, 451], [163, 517], [266, 641], [460, 709], [317, 735]]
+        "reasoning_prompt": "which is the medium flower"
     },
-    "trex":{
-        "gs_source": "output/llff/trex/point_cloud/iteration_10000/point_cloud.ply",
-        "colmap_dir": "data/nerf_llff_data/trex",
-        "feature_gs_source": "output/llff/trex/point_cloud/iteration_10000/16_feature_gs_10000.pt",
+    "room":{
+        "gs_source": "output/llff/room/point_cloud/iteration_10000/point_cloud.ply",
+        "colmap_dir": "data/nerf_llff_data/room",
+        "feature_gs_source": "output/llff/room/point_cloud/iteration_10000/16_feature_gs_10000.pt",
         "gs_feature_dim": 16,
         "images": "images_4",
-        "image_name": "DJI_20200223_163619_411.jpg",
-        "save_path": "output/16_nvos_masks/trex",
-        "mask_save_name": "DJI_20200223_163619_411_mask.png",
+        "save_path": "output/16_llff_masks/room",
         "mask_threshold": 0.65,
-        "points": [[380, 662]]
+        "reasoning_prompt": "what can be used to play videos"
     }
 }
