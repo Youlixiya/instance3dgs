@@ -53,8 +53,6 @@ def instance_segmentation(image, gaussian, instance_embeddings, render_instance_
     return masks_all_instance, instance_mask_map, instance_object_map
 def qwen_template(prompt):
     return f'Please grounding <ref> {prompt} </ref>'
-def lisa_template(prompt):
-    return f'Can you segment {prompt}?'
 def extract_box(text, w, h):
     pattern = r'\((.*?)\)'
     matches = re.findall(pattern, text)
@@ -147,7 +145,6 @@ if __name__ == '__main__':
     parser.add_argument("--cfg_path", type=str, required=True)
     parser.add_argument("--scene", type=str, required=True)
     parser.add_argument("--lisa", action='store_true')
-    parser.add_argument("--qwen_sam", action='store_true')
     parser.add_argument("--lisa_model_type", type=str, default="xinlai/LISA-13B-llama2-v1-explanatory")
     parser.add_argument("--lisa_conv_type", type=str, default="llava_llama_2")
     args = parser.parse_args()
@@ -188,18 +185,6 @@ if __name__ == '__main__':
     if args.lisa:
         lisa_pipeline = LISAPipeline(args.lisa_model_type, local_rank=0, load_in_4bit=False, load_in_8bit=True, conv_type=args.lisa_conv_type)
         save_path = os.path.join(args.save_path, 'lisa', args.reasoning_prompt)
-    elif args.qwen_sam:
-        from segment_anything import sam_model_registry, SamPredictor
-
-        sam_checkpoint = "ckpts/sam_vit_h_4b8939.pth"
-        model_type = "vit_h"
-
-        device = "cuda"
-
-        sam = sam_model_registry[model_type](checkpoint=sam_checkpoint)
-        sam.to(device=device)
-
-        predictor = SamPredictor(sam)
     else:
         save_path = os.path.join(args.save_path, args.reasoning_prompt)
     os.makedirs(save_path, exist_ok=True)
@@ -229,28 +214,10 @@ if __name__ == '__main__':
             if instance_feature_pca_dict is None:
                 instance_feature_pca_dict = get_pca_dict(instance_feature)
             if args.lisa:
-                result_list, mask_result_list, mask_list, mask_rgb_list, output_str = lisa_pipeline(lisa_template(args.reasoning_prompt), image=image)
+                result_list, mask_result_list, mask_list, mask_rgb_list, output_str = lisa_pipeline(lisa_text_prompt, image=image)
                 masks_all_instance = mask_result_list[0]
-                instance_mask_map = result_list[0]
-                instance_object_map = mask_list[0]
-            elif args.qwen_sam:
-                reasoning_prompt = qwen_template(args.reasoning_prompt)
-                image.save('tmp.jpg')
-                tmp_image_path = os.path.join(os.getcwd(), 'tmp.jpg')
-                answer, box = reasoning_grouding_by_qwen(tmp_image_path, reasoning_prompt)
-                predictor.set_image(np.array(image))
-                masks, _, _ = predictor.predict(
-                    point_coords=None,
-                    point_labels=None,
-                    box=box[None, :],
-                    multimask_output=False,
-                )
-                mask = masks[0]
-                masks_all_instance = (mask * 255).astype(np.uint8)
-                instance_mask_map = np.array(image)
-                instance_object_map = np.array(image)
-                instance_mask_map[mask, :] = instance_mask_map[mask, :] * 0.5 + np.array[255, 0, 0] * 0.5
-                instance_object_map[~mask, :] = np.array([255, 255, 255])
+                instance_mask_map = result_list[0] / 255
+                instance_object_map = mask_list[0] / 255
             else:
                 if instance_embeddings is None:
                     reasoning_prompt = qwen_template(args.reasoning_prompt)
@@ -261,11 +228,8 @@ if __name__ == '__main__':
                     reasoning_result.save(os.path.join(args.save_path, 'reasoning_result.jpg'))
                     instance_embeddings = get_instance_embeddings(gaussian, box, instance_feature)
                 masks_all_instance, instance_mask_map, instance_object_map = instance_segmentation(image_tensor, gaussian, instance_embeddings, instance_feature, args.mask_threshold, device='cuda')
-                masks_all_instance = (masks_all_instance.cpu().numpy() * 255).astype(np.uint8)
-                instance_mask_map = (instance_mask_map.clamp(0, 1).cpu().numpy() * 255).astype(np.uint8)
-                instance_object_map = (instance_object_map.clamp(0, 1).cpu().numpy() * 255).astype(np.uint8)
             Image.fromarray((apply_colormap(render_feature.permute(1, 2, 0), ColormapOptions(colormap="pca", pca_dict=rendered_feature_pca_dict)).cpu().numpy() * 255).astype(np.uint8)).save(os.path.join(rendered_feature_save_path, f'{cam.image_name}.png'))
             Image.fromarray((apply_colormap(instance_feature.permute(1, 2, 0), ColormapOptions(colormap="pca", pca_dict=instance_feature_pca_dict)).cpu().numpy() * 255).astype(np.uint8)).save(os.path.join(instance_feature_save_path, f'{cam.image_name}.png'))
-            Image.fromarray(masks_all_instance, mode='L').save(os.path.join(mask_save_path, f'{cam.image_name}.png'))
-            Image.fromarray(instance_mask_map).save(os.path.join(mask_map_save_path, f'{cam.image_name}.png'))
-            Image.fromarray(instance_object_map).save(os.path.join(mask_object_save_path, f'{cam.image_name}.png'))
+            Image.fromarray((masks_all_instance.cpu().numpy() * 255).astype(np.uint8), mode='L').save(os.path.join(mask_save_path, f'{cam.image_name}.png'))
+            Image.fromarray((instance_mask_map.clamp(0, 1).cpu().numpy() * 255).astype(np.uint8)).save(os.path.join(mask_map_save_path, f'{cam.image_name}.png'))
+            Image.fromarray((instance_object_map.clamp(0, 1).cpu().numpy() * 255).astype(np.uint8)).save(os.path.join(mask_object_save_path, f'{cam.image_name}.png'))
