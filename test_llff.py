@@ -187,7 +187,10 @@ if __name__ == '__main__':
     # cam = colmap_cameras.pop(i)
     if args.lisa:
         lisa_pipeline = LISAPipeline(args.lisa_model_type, local_rank=0, load_in_4bit=False, load_in_8bit=True, conv_type=args.lisa_conv_type)
-        save_path = os.path.join(args.save_path, 'lisa', args.reasoning_prompt)
+        save_path = args.save_path.split('/')
+        save_path.insert(2, 'lisa')
+        save_path.append(args.reasoning_prompt)
+        save_path = '/'.join(save_path)
     elif args.qwen_sam:
         from segment_anything import sam_model_registry, SamPredictor
 
@@ -200,6 +203,11 @@ if __name__ == '__main__':
         sam.to(device=device)
 
         predictor = SamPredictor(sam)
+        save_path = args.save_path.split('/')
+        save_path.insert(2, 'qwen_sam')
+        save_path.append(args.reasoning_prompt)
+        save_path = '/'.join(save_path)
+        # save_path = os.path.join(args.save_path, '', )
     else:
         save_path = os.path.join(args.save_path, args.reasoning_prompt)
     os.makedirs(save_path, exist_ok=True)
@@ -238,6 +246,7 @@ if __name__ == '__main__':
                 image.save('tmp.jpg')
                 tmp_image_path = os.path.join(os.getcwd(), 'tmp.jpg')
                 answer, box = reasoning_grouding_by_qwen(tmp_image_path, reasoning_prompt)
+                box = np.array(box)
                 predictor.set_image(np.array(image))
                 masks, _, _ = predictor.predict(
                     point_coords=None,
@@ -249,7 +258,7 @@ if __name__ == '__main__':
                 masks_all_instance = (mask * 255).astype(np.uint8)
                 instance_mask_map = np.array(image)
                 instance_object_map = np.array(image)
-                instance_mask_map[mask, :] = instance_mask_map[mask, :] * 0.5 + np.array[255, 0, 0] * 0.5
+                instance_mask_map[mask, :] = instance_mask_map[mask, :] * 0.5 + np.array([255, 0, 0]) * 0.5
                 instance_object_map[~mask, :] = np.array([255, 255, 255])
             else:
                 if instance_embeddings is None:
