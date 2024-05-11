@@ -31,9 +31,9 @@ def get_accuracy(pred_mask, gt_mask):
 
 if __name__ == '__main__':
     parser = ArgumentParser()
-    parser.add_argument("--cfg_path", type=str, required=True)
-    parser.add_argument("--gt_path", type=str, required=True)
-    parser.add_argument("--save_tag", type=str, required=True)
+    parser.add_argument("--cfg_path", type=str, default='scripts/16_llff_test_config.json')
+    parser.add_argument("--gt_path", type=str, default='llff_reasoning_masks')
+    # parser.add_argument("--save_tag", type=str, required=True)
     
     args = parser.parse_args()
     with open(args.cfg_path, 'r') as f:
@@ -83,5 +83,5 @@ if __name__ == '__main__':
     mean_iou = sum(ious) / len(ious)
     mean_acc = sum(accs) / len(accs)
     metrics += f'mean\t{mean_iou}\t{mean_acc}'
-    with open(f'{args.save_tag}_metrics.txt', 'w') as f:
+    with open(f'reasoning_metrics.txt', 'w') as f:
         f.write(metrics)

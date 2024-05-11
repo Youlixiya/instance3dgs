@@ -1,0 +1,14 @@
+tqdm
+plyfile
+scipy
+opencv-python
+trimesh
+pycocotools
+scikit-learn
+jaxtyping
+transformers==4.31.0
+einops
+sentencepiece
+accelerate
+bitsandbytes
+git+https://github.com/facebookresearch/segment-anything.git

@@ -238,7 +238,8 @@ if __name__ == '__main__':
                 instance_feature_pca_dict = get_pca_dict(instance_feature)
             if args.lisa:
                 result_list, mask_result_list, mask_list, mask_rgb_list, output_str = lisa_pipeline(lisa_template(args.reasoning_prompt), image=image)
-                masks_all_instance = mask_result_list[0]
+                masks_all_instance = (mask_list[0] * 255).astype(np.uint8)
+                print(masks_all_instance.shape)
                 instance_mask_map = result_list[0]
                 instance_object_map = mask_list[0]
             elif args.qwen_sam:
@@ -256,6 +257,7 @@ if __name__ == '__main__':
                 )
                 mask = masks[0]
                 masks_all_instance = (mask * 255).astype(np.uint8)
+
                 instance_mask_map = np.array(image)
                 instance_object_map = np.array(image)
                 instance_mask_map[mask, :] = instance_mask_map[mask, :] * 0.5 + np.array([255, 0, 0]) * 0.5

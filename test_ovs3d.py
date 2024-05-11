@@ -167,7 +167,7 @@ if __name__ == '__main__':
                 instance_embeddings = gaussian.instance_embeddings[mask_index]
                 semantic_valid_num = [len(instance_embeddings)]
                 masks_all_semantic, semantic_mask_map, semantic_object_map = text_semantic_segmentation(image_tensor, instance_embeddings, instance_feature, args.text_mask_threshold[j], semantic_valid_num)
-                clip_mask = np.stack([(masks_all_semantic.cpu().numpy() * 255).astype(np.uint8)] * 3, axis=-1)
+                clip_mask = (masks_all_semantic.cpu().numpy() * 255).astype(np.uint8)
                 clip_mask_map = (semantic_mask_map.clamp(0, 1).cpu().numpy() * 255).astype(np.uint8)
                 clip_object = (semantic_object_map.clamp(0, 1).cpu().numpy() * 255).astype(np.uint8)
                 text_prompt = args.clip_text_prompt[j]

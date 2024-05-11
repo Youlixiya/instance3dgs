@@ -14,11 +14,11 @@ def get_accuracy(pred_mask, gt_mask):
 
 if __name__ == '__main__':
     parser = ArgumentParser()
-    parser.add_argument("--lisa_output_path", type=str, default='output/16_llff_masks/qwen_sam')
-    parser.add_argument("--gt_path", type=str, default='data/llff_reasoning_masks')
+    parser.add_argument("--pred_output_path", type=str, default='output/16_llff_masks/qwen_sam')
+    parser.add_argument("--gt_path", type=str, default='llff_reasoning_masks')
     parser.add_argument("--tag", type=str, default='qwen_sam_metrics')
     args = parser.parse_args()
-    scenes = os.listdir(args.lisa_output_path)
+    scenes = os.listdir(args.pred_output_path)
     scenes.sort()
     # print(scenes)
     masks = []
@@ -27,13 +27,13 @@ if __name__ == '__main__':
     accs = []
     metrics = 'Scene\tIoU\tAcc\tPR\n'
     for scene in scenes:
-        prompts = os.listdir(os.path.join(args.lisa_output_path, scene))
+        prompts = os.listdir(os.path.join(args.pred_output_path, scene))
         prompt = prompts[0]
         # print(scenes)
         # for prompt in prompts:
         iou = []
         acc = []
-        mask_path = os.path.join(args.lisa_output_path, scene, prompt, 'masks')
+        mask_path = os.path.join(args.pred_output_path, scene, prompt, 'masks')
         gt_mask_path = os.path.join(args.gt_path, scene, prompt)
         mask_names = os.listdir(mask_path)
         for mask_name in mask_names:
