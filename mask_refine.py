@@ -45,23 +45,29 @@ if __name__ == '__main__':
         refine_colors += torch.unique(refine_masks[i].reshape(-1, 3), dim=0).tolist()
         
     src_colors = torch.unique(torch.tensor(src_colors, dtype=torch.uint8, device='cuda'), dim=0)
-    refine_colors = torch.unique(torch.tensor(refine_colors, dtype=torch.uint8, device='cuda'), dim=0)[[1], ...]
+    refine_colors = torch.unique(torch.tensor(refine_colors, dtype=torch.uint8, device='cuda'), dim=0)[1:, ...]
+    # print(refine_colors.shape)
+    if refine_colors.ndim == 1:
+        refine_colors = refine_colors[None]
+    print(refine_colors)
+    i = 0
     for refine_color in refine_colors:
-        i = 0
         while refine_color in src_colors:
         # while (refine_color in src_colors):
             refine_color = torch.tensor(COLORS[i], dtype=torch.uint8, device='cuda')
             i += 1
         fusion_colors.append(refine_color)
-    
+    print(fusion_colors)
     for i in tqdm(range(len(src_masks))):
         src_mask = src_masks[i]
         refine_mask = refine_masks[i]
         for j, refine_color in enumerate(refine_colors):
             h, w = refine_mask.shape[:2]
-            refine_mask = refine_mask.reshape(h*w, -1)
-            target_color = refine_color[None, :].expand(refine_mask.size())
-            mask = torch.eq(refine_mask, target_color).all(dim=1).reshape(h, w)
+            refine_mask_ = refine_mask.reshape(h*w, -1)
+            # print(j)
+            # print(refine_mask.size())
+            target_color = refine_color[None, :].expand(refine_mask_.size())
+            mask = torch.eq(refine_mask_, target_color).all(dim=1).reshape(h, w)
             # print(mask.shape)
             # print(src_mask.dtype)
             # print(fusion_colors[j].dtype)
