@@ -43,7 +43,7 @@ def get_accuracy(pred_mask, gt_mask):
     return (pos_acc + neg_acc) / 2
 
 def get_correct(pred_mask, gt_mask):
-    return (pred_mask==255) & (gt_mask==255).sum()
+    return ((pred_mask==255) & (gt_mask==255)).sum()
 
 # def get_accuracy(pred_mask, gt_mask):
 #     h, w = pred_mask.shape
@@ -141,13 +141,14 @@ if __name__ == '__main__':
             view_ious = []
             # view_accs = []
             view_correct = 0
+            view_gt = 0
             # view_gt_mask = []
             # view_mask = []
             for view_mask in view_masks:
                 gt_mask_path = os.path.join(mask_path, view, view_mask)
                 pred_mask_path = os.path.join(args.pred_path, scene, view, 'masks', view_mask)
                 mask = np.array(Image.open(pred_mask_path))
-                pixel_cnt = mask.shape[0] * mask.shape[1]
+                # pixel_cnt = mask.shape[0] * mask.shape[1]
                 gt_mask = np.array(Image.open(gt_mask_path).resize((mask.shape[1], mask.shape[0])))[..., 0]
                 # mask = (np.array(Image.open(pred_mask_path)) / 255).astype(np.uint8)
                 # gt_mask = (np.array(Image.open(gt_mask_path).resize((mask.shape[1], mask.shape[0])))[..., 0] / 255).astype(np.uint8)
@@ -157,11 +158,13 @@ if __name__ == '__main__':
                 iou = get_iou(mask, gt_mask)
                 # acc = get_accuracy(mask, gt_mask)
                 view_ious.append(iou)
-                view_correct += (get_correct((mask, gt_mask)))
+                view_correct += (get_correct(mask, gt_mask))
+                view_gt += (gt_mask == 255).sum()
                 # view_accs.append(acc)
             scene_ious.append(sum(view_ious) / len(view_ious))
             # scene_accs.append(sum(view_accs) / len(view_accs))
-            scene_accs.append(view_correct / pixel_cnt)
+            print(view_correct / view_gt)
+            scene_accs.append(view_correct / view_gt)
             
                 # if scene_ious.get(view_mask, 0) == 0:
                 #     scene_ious[view_mask] = [iou]
