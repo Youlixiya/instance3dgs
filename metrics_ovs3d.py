@@ -42,6 +42,9 @@ def get_accuracy(pred_mask, gt_mask):
     # tp_fn = (pred_mask == gt_mask).sum()
     return (pos_acc + neg_acc) / 2
 
+def get_correct(pred_mask, gt_mask):
+    return (pred_mask==255) & (gt_mask==255).sum()
+
 # def get_accuracy(pred_mask, gt_mask):
 #     h, w = pred_mask.shape
 #     # print(((pred_mask==255) & (gt_mask==255)).shape)
@@ -67,6 +70,41 @@ def get_accuracy(pred_mask, gt_mask):
 #     tp = ((pred_mask & gt_mask) == 255).sum()
 #     tp_fp = (pred_mask.reshape(-1) == 255).sum()
 #     return tp / tp_fp
+
+def read_segmentation_maps(root_dir, downsample=8):
+        segmentation_path = os.path.join(root_dir, 'segmentations')
+        classes_file_path = os.path.join(root_dir, 'segmentations', 'classes.txt')
+        with open(classes_file_path, 'r') as f:
+            classes = f.readlines()
+        classes = [class_.strip() for class_ in classes]
+        # get a list of all the folders in the directory
+        folders = [f for f in os.listdir(segmentation_path) if os.path.isdir(os.path.join(segmentation_path, f))]
+
+        seg_maps = []
+        idxes = [] # the idx of the test imgs
+        for folder in folders:
+            idxes.append(int(folder))  # to get the camera id
+            seg_for_one_image = []
+            for class_name in classes:
+                # check if the seg map exists
+                seg_path = os.path.join(root_dir, f'segmentations/{folder}/{class_name}.png')
+                if not os.path.exists(seg_path):
+                    raise Exception(f'Image {class_name}.png does not exist')
+                img = Image.open(seg_path).convert('L')
+                # resize the seg map
+                if downsample != 1.0:
+                    img_wh = (int(img.size(0) / downsample), int(img.size(1) / downsample))
+                    img = img.resize(img_wh, Image.NEAREST) # [W, H]
+                img = (np.array(img) / 255.0).astype(np.int8) # [H, W]
+                img = img.flatten() # [H*W]
+                seg_for_one_image.append(img)
+
+            seg_for_one_image = np.stack(seg_for_one_image, axis=0)
+            seg_for_one_image = seg_for_one_image.transpose(1, 0)
+            seg_maps.append(seg_for_one_image)
+
+        seg_maps = np.stack(seg_maps, axis=0) # [n_frame, H*W, n_class]
+        return seg_maps
 
 if __name__ == '__main__':
     parser = ArgumentParser()
@@ -101,19 +139,29 @@ if __name__ == '__main__':
         for view in tqdm(views):
             view_masks = os.listdir(os.path.join(mask_path, view))
             view_ious = []
-            view_accs = []
+            # view_accs = []
+            view_correct = 0
+            # view_gt_mask = []
+            # view_mask = []
             for view_mask in view_masks:
                 gt_mask_path = os.path.join(mask_path, view, view_mask)
                 pred_mask_path = os.path.join(args.pred_path, scene, view, 'masks', view_mask)
                 mask = np.array(Image.open(pred_mask_path))
+                pixel_cnt = mask.shape[0] * mask.shape[1]
                 gt_mask = np.array(Image.open(gt_mask_path).resize((mask.shape[1], mask.shape[0])))[..., 0]
+                # mask = (np.array(Image.open(pred_mask_path)) / 255).astype(np.uint8)
+                # gt_mask = (np.array(Image.open(gt_mask_path).resize((mask.shape[1], mask.shape[0])))[..., 0] / 255).astype(np.uint8)
+                # view_gt_mask.append(gt_mask)
+                # view_mask.append(mask)
                 
                 iou = get_iou(mask, gt_mask)
-                acc = get_accuracy(mask, gt_mask)
+                # acc = get_accuracy(mask, gt_mask)
                 view_ious.append(iou)
-                view_accs.append(acc)
+                view_correct += (get_correct((mask, gt_mask)))
+                # view_accs.append(acc)
             scene_ious.append(sum(view_ious) / len(view_ious))
-            scene_accs.append(sum(view_accs) / len(view_accs))
+            # scene_accs.append(sum(view_accs) / len(view_accs))
+            scene_accs.append(view_correct / pixel_cnt)
             
                 # if scene_ious.get(view_mask, 0) == 0:
                 #     scene_ious[view_mask] = [iou]
