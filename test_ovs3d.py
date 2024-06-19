@@ -216,9 +216,10 @@ def read_segmentation_maps(root_dir, downsample=8):
         with open(classes_file_path, 'r') as f:
             classes = f.readlines()
         classes = [class_.strip() for class_ in classes]
+        classes.sort()
+        # print(classes)
         # get a list of all the folders in the directory
-        folders = [f for f in os.listdir(segmentation_path) if os.path.isdir(os.path.join(segmentation_path, f))]
-
+        folders = [f for f in sorted(os.listdir(segmentation_path)) if os.path.isdir(os.path.join(segmentation_path, f))]
         seg_maps = []
         idxes = [] # the idx of the test imgs
         for folder in folders:
@@ -232,7 +233,8 @@ def read_segmentation_maps(root_dir, downsample=8):
                 img = Image.open(seg_path).convert('L')
                 # resize the seg map
                 if downsample != 1.0:
-                    img_wh = (int(img.size(0) / downsample), int(img.size(1) / downsample))
+
+                    img_wh = (int(img.size[0] / downsample), int(img.size[1] / downsample))
                     img = img.resize(img_wh, Image.NEAREST) # [W, H]
                 img = (np.array(img) / 255.0).astype(np.int8) # [H, W]
                 img = img.flatten() # [H*W]
@@ -251,15 +253,15 @@ if __name__ == '__main__':
     pipe = PipelineParams(parser)
     parser.add_argument("--cfg_path", type=str, required=True)
     # parser.add_argument("--scene", type=str, required=True)
-    parser.add_argument("--gt_path", type=str, required=True)
+    # parser.add_argument("--gt_path", type=str, required=True)
     # parser.add_argument("--output_path", type=str, required=True)
     # parser.add_argument("--scene", type=str, required=True)
-    scenes = ['bed', 'bench', 'lawn', 'room', 'sofa']
+    scene_names = ['bed', 'bench', 'lawn', 'room', 'sofa']
     args = parser.parse_args()
     metrics = 'Scene\tIoU\tAcc\n'
-    for scene in scenes:
+    for scene_name in tqdm(scene_names):
         with open(args.cfg_path, 'r') as f:
-            cfg = AttrDict(json.load(f)[scene])
+            cfg = AttrDict(json.load(f)[scene_name])
         args = AttrDict(args.__dict__)
         args.update(cfg)
         gaussian = GaussianFeatureModel(sh_degree=3, gs_feature_dim=args.gs_feature_dim)
@@ -285,6 +287,7 @@ if __name__ == '__main__':
             colmap_cameras = scene.cameras
             img_suffix = os.listdir(os.path.join(args.colmap_dir, args.images))[0].split('.')[-1]
             imgs_name = [f'{camera.image_name}.{img_suffix}' for camera in colmap_cameras]
+            # print(imgs_name)
             imgs_path = [os.path.join(args.colmap_dir, args.images, img_name) for img_name in imgs_name]
         instance_embeddings = []
         rendered_feature_pca_dict = None
@@ -293,12 +296,17 @@ if __name__ == '__main__':
         dc = DistinctColors()
         #clip
         clip = OpenCLIPNetwork(OpenCLIPNetworkConfig())
-        clip.set_positives(args.clip_text_prompt)
+        clip_text_prompt = args.clip_text_prompt
+        clip_text_prompt.sort()
+        # print(clip_text_prompt)
+        clip.set_positives(clip_text_prompt)
+        valid_index = 0
         for i in tqdm(range(len(colmap_cameras))):
             cam = colmap_cameras[i]
-            gt_seg = seg_maps[i]
-            if cam.image_name not in target_image_names:
+            if cam.image_name not in target_image_names or valid_index == len(seg_maps):
                 continue
+            gt_seg = seg_maps[valid_index]
+            valid_index += 1
             with torch.no_grad():
                 mask_map_save_path = os.path.join(args.save_path, cam.image_name, 'mask_maps')
                 mask_save_path = os.path.join(args.save_path, cam.image_name, 'masks')
@@ -319,17 +327,19 @@ if __name__ == '__main__':
                     instance_feature_pca_dict = get_pca_dict(instance_feature)
                 Image.fromarray((apply_colormap(render_feature.permute(1, 2, 0), ColormapOptions(colormap="pca", pca_dict=rendered_feature_pca_dict)).cpu().numpy() * 255).astype(np.uint8)).save(os.path.join(args.save_path, cam.image_name, f'rendered_feature_pca.jpg'))
                 Image.fromarray((apply_colormap(instance_feature.permute(1, 2, 0), ColormapOptions(colormap="pca", pca_dict=instance_feature_pca_dict)).cpu().numpy() * 255).astype(np.uint8)).save(os.path.join(args.save_path, cam.image_name, f'instance_feature_pca.jpg'))
-                if instance_embeddings is None:
+                if instance_embeddings == []:
                     for j in range(len(clip.positives)):
                         relevancy = clip.get_relevancy(gaussian.clip_embeddings, j)[..., 0]
                         print(relevancy.max())
-                        mask_index = relevancy > args.text_query_threshold[j]
-                        instance_embeddings.append(gaussian.instance_embeddings[mask_index])
-                        print(torch.stack(instance_embeddings).shape)
-                        instance_embeddings = torch.stack(instance_embeddings)
-                p_class = (instance_feature.permute(1, 2, 0) @ instance_embeddings.T).softmax(-1)
-                class_index = torch.argmax(p_class, dim=-1).cpu() # [N1]
-                segmentation_map = vis_seg(dc, class_index, H, W, rgb=rgb)
+                        # mask_index = relevancy > args.text_query_threshold[j]
+                        mask_index = relevancy.argmax()
+                        instance_embeddings.append(gaussian.instance_embeddings[mask_index][None])
+                    print(torch.cat(instance_embeddings).shape)
+                    instance_embeddings = torch.cat(instance_embeddings)
+                p_class = (instance_embeddings @ instance_feature.reshape(-1, h*w)).softmax(0)
+                # print(p_class.shape)
+                class_index = torch.argmax(p_class, dim=0).cpu() # [N1]
+                segmentation_map = vis_seg(dc, class_index, H, W, rgb=rgb.cpu())
 
                 one_hot = F.one_hot(class_index.long(), num_classes=gt_seg.shape[-1]) # [N1, n_classes]
                 one_hot = one_hot.detach().cpu().numpy().astype(np.int8)
@@ -337,7 +347,8 @@ if __name__ == '__main__':
                 print('iou for classes:', IoUs[-1], 'mean iou:', np.mean(IoUs[-1]))
                 accuracies.append(accuracy_score(gt_seg, one_hot))
                 print('accuracy:', accuracies[-1])
-        metrics += f'mean\t{np.mean(IoUs)}\t{np.mean(accuracies)}'
+                Image.fromarray(segmentation_map).save(os.path.join(mask_map_save_path, 'segmentation_map.png'))
+        metrics += f'{scene_name}\t{np.mean(IoUs)}\t{np.mean(accuracies)}\n'
         with open(f'ovs3d.txt', 'w') as f:
             f.write(metrics)
                     # semantic_valid_num = [len(instance_embeddings)]
