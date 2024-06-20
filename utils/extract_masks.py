@@ -47,6 +47,7 @@ class MaskDataset(Dataset):
             colors_masks = np.load(self.masks_path, allow_pickle=True)['arr_0'].tolist()
             self.instance_masks = colors_masks['instance_masks']
             self.instance_colors = colors_masks['instance_colors']
+            self.aggregation_clip_embeddings = colors_masks['aggregation_clip_embeddings']
             self.clip_embeddings = colors_masks['clip_embeddings']
         else:
             self.masks_name = [img_name.split('.')[0] + '.png' for img_name in self.imgs_name]
@@ -68,7 +69,8 @@ class MaskDataset(Dataset):
             save_path = os.path.join(source_root, f'{mask_dir}.npz')
             np.savez_compressed(save_path, {'instance_masks': self.instance_masks,
                                             'instance_colors':self.instance_colors,
-                                            'clip_embeddings':self.clip_embeddings})
+                                            'clip_embeddings':self.clip_embeddings,
+                                            'aggregation_clip_embeddings':self.aggregation_clip_embeddings})
             
         torch.cuda.empty_cache()
     
@@ -90,7 +92,7 @@ class MaskDataset(Dataset):
     def asign_masks(self):
         n, h, w, c = self.masks.shape
         self.instance_masks = torch.zeros((n, h, w, 1), device=self.device)
-        self.clip_embeddings = torch.zeros((self.instance_colors.shape[0], 512), dtype=torch.float32, device=self.device)
+        self.clip_embeddings = torch.zeros((n, self.instance_colors.shape[0], 512), dtype=torch.float32, device=self.device)
         self.clip_embeddings_cnt = torch.zeros((self.instance_colors.shape[0], 1), dtype=torch.long, device=self.device)
         for i in trange(len(self.instance_colors)):
         # for i in trange(3):
@@ -103,7 +105,7 @@ class MaskDataset(Dataset):
                 if torch.sum(index) > 0:
                     # mask_embedding = self.get_clip_embedding(index.cpu().numpy().copy(), self.imgs[j].copy())
                     mask_embedding = self.get_clip_embedding(index.cpu().clone(), self.imgs[j].copy())
-                    self.clip_embeddings[i, :] += mask_embedding
+                    self.clip_embeddings[j, i, :] = mask_embedding
                     self.clip_embeddings_cnt[i, :] += 1
                     # if tmp_clip_embedding is None:
                     #     tmp_clip_embedding = mask_embedding
@@ -123,9 +125,11 @@ class MaskDataset(Dataset):
         # self.semantic_masks = self.semantic_masks.long()
         # self.semantic_colors = torch.stack(self.semantic_colors)
         # self.clip_embeddings = torch.stack(self.clip_embeddings)
-        self.clip_embeddings = self.clip_embeddings / self.clip_embeddings_cnt
+        self.aggregation_clip_embeddings = torch.sum(self.clip_embeddings, dim=0)
+        self.aggregation_clip_embeddings = self.aggregation_clip_embeddings / self.clip_embeddings_cnt
+        # self.clip_embeddings = self.clip_embeddings / self.clip_embeddings_cnt
+        self.aggregation_clip_embeddings = torch.nn.functional.normalize(self.aggregation_clip_embeddings, dim=-1)
         self.clip_embeddings = torch.nn.functional.normalize(self.clip_embeddings, dim=-1)
-        
         # semantic_mask_rgb_save_path = os.path.join(self.source_root, self.mask_dir, 'SemanticMasks')
         # os.makedirs(semantic_mask_rgb_save_path, exist_ok=True)
         # for i in trange(len(self.semantic_masks)):

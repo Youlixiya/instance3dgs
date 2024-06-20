@@ -66,7 +66,7 @@ def training(args, dataset, opt, pipe, saving_iterations):
     instance_num = len(mask_dataset.instance_colors)
     print(f'instance num: {instance_num}')
     gaussians.set_instance_embeddings(len(mask_dataset.instance_colors))
-    gaussians.set_clip_embeddings(mask_dataset.clip_embeddings)
+    gaussians.set_clip_embeddings(mask_dataset.clip_embeddings, mask_dataset.aggregation_clip_embeddings)
     gaussians.set_instance_colors(mask_dataset.instance_colors)
     gaussians.feature_training_setup(opt)
     progress_bar = tqdm(range(cur_iter, opt.feature_iterations), desc="Training Feature GS progress")

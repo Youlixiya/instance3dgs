@@ -178,6 +178,7 @@ if __name__ == '__main__':
         img_suffix = os.listdir(os.path.join(args.colmap_dir, args.images))[0].split('.')[-1]
         imgs_name = [f'{camera.image_name}.{img_suffix}' for camera in colmap_cameras]
         imgs_path = [os.path.join(args.colmap_dir, args.images, img_name) for img_name in imgs_name]
+    print(len(imgs_path))
     # for i, img in enumerate(imgs_name):
     #     if args.image_name == img:
     #         break

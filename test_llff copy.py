@@ -2,8 +2,6 @@ import os
 import cv2
 import torch
 import json
-import torchvision
-import open_clip
 import time
 import numpy as np
 import torch.nn.functional as F
@@ -150,8 +148,6 @@ if __name__ == '__main__':
     parser.add_argument("--scene", type=str, required=True)
     parser.add_argument("--lisa", action='store_true')
     parser.add_argument("--qwen_sam", action='store_true')
-    parser.add_argument("--clip_model_type", type=str, default="ViT-B-16")
-    parser.add_argument("--clip_model_pretrained", type=str, default="laion2b_s34b_b88k")
     parser.add_argument("--lisa_model_type", type=str, default="xinlai/LISA-13B-llama2-v1-explanatory")
     parser.add_argument("--lisa_conv_type", type=str, default="llava_llama_2")
     args = parser.parse_args()
@@ -181,11 +177,8 @@ if __name__ == '__main__':
         h, w = cv2.imread(os.path.join(args.colmap_dir, args.images, img_name)).shape[:2]
         scene = CamScene(args.colmap_dir, h=h, w=w, eval=True)
         cameras_extent = scene.cameras_extent
-        colmap_train_cameras = scene.cameras
         colmap_cameras = scene.eval_cameras
         img_suffix = os.listdir(os.path.join(args.colmap_dir, args.images))[0].split('.')[-1]
-        train_imgs_name = [f'{camera.image_name}.{img_suffix}' for camera in colmap_train_cameras]
-        train_imgs_path = [os.path.join(args.colmap_dir, args.images, img_name) for img_name in train_imgs_name]
         imgs_name = [f'{camera.image_name}.{img_suffix}' for camera in colmap_cameras]
         imgs_path = [os.path.join(args.colmap_dir, args.images, img_name) for img_name in imgs_name]
     # for i, img in enumerate(imgs_name):
@@ -221,78 +214,19 @@ if __name__ == '__main__':
     instance_embeddings = None
     rendered_feature_pca_dict = None
     instance_feature_pca_dict = None
-    
-    rendered_feature_save_path = os.path.join(save_path, 'rendered_features')
-    instance_feature_save_path = os.path.join(save_path, 'instance_features')
-    mask_map_save_path = os.path.join(save_path, 'mask_maps')
-    mask_save_path = os.path.join(save_path, 'masks')
-    mask_object_save_path = os.path.join(save_path, 'objects')
-    
-    os.makedirs(rendered_feature_save_path, exist_ok=True)
-    os.makedirs(instance_feature_save_path, exist_ok=True)
-    os.makedirs(mask_map_save_path, exist_ok=True)
-    os.makedirs(mask_save_path, exist_ok=True)
-    os.makedirs(mask_object_save_path, exist_ok=True)
-    if not args.lisa and not args.qwen_sam:
-        similarity_scores = torch.zeros((len(colmap_train_cameras)))
-        instance_index = torch.zeros((len(colmap_train_cameras)))
-        preprocess = torchvision.transforms.Compose(
-            [
-                torchvision.transforms.Resize((224, 224)),
-                torchvision.transforms.ToTensor(),
-                torchvision.transforms.Normalize(
-                    mean=[0.48145466, 0.4578275, 0.40821073],
-                    std=[0.26862954, 0.26130258, 0.27577711],
-                ),
-            ]
-        )
-        clip_model, _, _ = open_clip.create_model_and_transforms(args.clip_model_type,
-                                                                pretrained=args.clip_model_pretrained,
-                                                                precision="fp16",
-                                                                device='cuda')
-        clip_model = clip_model.cuda()
-        bounding_box_save_path = os.path.join(save_path, 'bounding_box')
-        os.makedirs(bounding_box_save_path, exist_ok=True)
-        for i in tqdm(range(len(colmap_train_cameras))):
-            cam = colmap_train_cameras[i]
-            with torch.no_grad():
-                render_pkg = render(cam, gaussian, pipe, background)
-                image_tensor = render_pkg['render'].permute(1, 2, 0).clamp(0, 1)
-                image_np = (image_tensor.cpu().numpy() * 255).astype(np.uint8)
-                image = Image.fromarray(image_np)
-                render_feature = render(cam, gaussian, pipe, feature_bg, render_feature=True, override_feature=gaussian.gs_features)['render_feature']
-                instance_feature = F.normalize(render_feature.reshape(-1, h*w), dim=0).reshape(-1, h, w)
-                if rendered_feature_pca_dict is None:
-                    rendered_feature_pca_dict = get_pca_dict(render_feature)
-                if instance_feature_pca_dict is None:
-                    instance_feature_pca_dict = get_pca_dict(instance_feature)
-                reasoning_prompt = qwen_template(args.reasoning_prompt)
-                image.save('tmp.jpg')
-                tmp_image_path = os.path.join(os.getcwd(), 'tmp.jpg')
-                answer, box = reasoning_grouding_by_qwen(tmp_image_path, reasoning_prompt)
-                reasoning_result = draw_rectangle(image, [box])
-                reasoning_result.save(os.path.join(bounding_box_save_path, f'reasoning_result_{cam.image_name}.png'))
-                bounding_box_image_np = image_np[box[1]:box[3], box[0]:box[2], :]
-                bounding_box_image_pil = Image.fromarray(bounding_box_image_np)
-                bounding_box_image_pil.save(os.path.join(bounding_box_save_path, f'bounding_box_{cam.image_name}.png'))
-                bounding_box_image_tensor = preprocess(bounding_box_image_pil).half().cuda()[None]
-                bounding_box_image_clip_embedding = clip_model.encode_image(bounding_box_image_tensor)
-                bounding_box_image_clip_embedding_norm = bounding_box_image_clip_embedding / bounding_box_image_clip_embedding.norm(dim=-1, keepdim=True)
-                cur_clip_embeddings = gaussian.clip_embeddings[i].half()
-                similarity_score = bounding_box_image_clip_embedding_norm @ cur_clip_embeddings.T
-                most_relevant_instance_index = similarity_score.argmax(-1)
-                similarity_scores[i] = similarity_score[:, most_relevant_instance_index].float()
-                instance_index[i] = most_relevant_instance_index
-        print(similarity_scores)
-        print(instance_index)
-        unique_index, counts = torch.unique(instance_index, return_counts=True)
-        index = unique_index[torch.argmax(counts)].long()
-        instance_embeddings = gaussian.instance_embeddings[index]
-                # instance_embeddings = get_instance_embeddings(gaussian, box, instance_feature)
-
     for i in tqdm(range(len(colmap_cameras))):
         cam = colmap_cameras[i]
         with torch.no_grad():
+            rendered_feature_save_path = os.path.join(save_path, 'rendered_features')
+            instance_feature_save_path = os.path.join(save_path, 'instance_features')
+            mask_map_save_path = os.path.join(save_path, 'mask_maps')
+            mask_save_path = os.path.join(save_path, 'masks')
+            mask_object_save_path = os.path.join(save_path, 'objects')
+            os.makedirs(rendered_feature_save_path, exist_ok=True)
+            os.makedirs(instance_feature_save_path, exist_ok=True)
+            os.makedirs(mask_map_save_path, exist_ok=True)
+            os.makedirs(mask_save_path, exist_ok=True)
+            os.makedirs(mask_object_save_path, exist_ok=True)
             render_pkg = render(cam, gaussian, pipe, background)
             image_tensor = render_pkg['render'].permute(1, 2, 0).clamp(0, 1)
             image = Image.fromarray((image_tensor.cpu().numpy() * 255).astype(np.uint8))
@@ -329,14 +263,14 @@ if __name__ == '__main__':
                 instance_mask_map[mask, :] = instance_mask_map[mask, :] * 0.5 + np.array([255, 0, 0]) * 0.5
                 instance_object_map[~mask, :] = np.array([255, 255, 255])
             else:
-                # if instance_embeddings is None:
-                #     reasoning_prompt = qwen_template(args.reasoning_prompt)
-                #     image.save('tmp.jpg')
-                #     tmp_image_path = os.path.join(os.getcwd(), 'tmp.jpg')
-                #     answer, box = reasoning_grouding_by_qwen(tmp_image_path, reasoning_prompt)
-                #     reasoning_result = draw_rectangle(image, [box])
-                #     reasoning_result.save(os.path.join(args.save_path, 'reasoning_result.jpg'))
-                #     instance_embeddings = get_instance_embeddings(gaussian, box, instance_feature)
+                if instance_embeddings is None:
+                    reasoning_prompt = qwen_template(args.reasoning_prompt)
+                    image.save('tmp.jpg')
+                    tmp_image_path = os.path.join(os.getcwd(), 'tmp.jpg')
+                    answer, box = reasoning_grouding_by_qwen(tmp_image_path, reasoning_prompt)
+                    reasoning_result = draw_rectangle(image, [box])
+                    reasoning_result.save(os.path.join(args.save_path, 'reasoning_result.jpg'))
+                    instance_embeddings = get_instance_embeddings(gaussian, box, instance_feature)
                 masks_all_instance, instance_mask_map, instance_object_map = instance_segmentation(image_tensor, gaussian, instance_embeddings, instance_feature, args.mask_threshold, device='cuda')
                 masks_all_instance = (masks_all_instance.cpu().numpy() * 255).astype(np.uint8)
                 instance_mask_map = (instance_mask_map.clamp(0, 1).cpu().numpy() * 255).astype(np.uint8)

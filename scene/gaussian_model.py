@@ -482,8 +482,9 @@ class GaussianFeatureModel(GaussianModel):
         self.instance_num = instance_num
         self.instance_embeddings = torch.randn((instance_num, self.gs_feature_dim), dtype=torch.float, device=self.device).requires_grad_(True)
     
-    def set_clip_embeddings(self, clip_embeddings):
+    def set_clip_embeddings(self, clip_embeddings, aggregation_clip_embeddings):
         self.clip_embeddings = clip_embeddings
+        self.aggregation_clip_embeddings = aggregation_clip_embeddings
     
     def set_instance_colors(self, instance_colors):
         self.instance_colors = instance_colors
@@ -561,6 +562,7 @@ class GaussianFeatureModel(GaussianModel):
             'instance_embeddings': self.instance_embeddings.detach().cpu().numpy(),
             # 'instance_feature_decoder': self.instance_feature_decoder.state_dict(),
             'clip_embeddings': self.clip_embeddings,
+            'aggregation_clip_embeddings': self.aggregation_clip_embeddings,
             'instance_colors': self.instance_colors.cpu(),
             'instance_num': self.instance_num,
         }
@@ -577,6 +579,7 @@ class GaussianFeatureModel(GaussianModel):
         self.instance_colors = state['instance_colors']
         self.instance_num = state['instance_num']
         self.clip_embeddings = state['clip_embeddings']
+        self.aggregation_clip_embeddings = state['aggregation_clip_embeddings']
         # self.instance_feature_decoder.load_state_dict(state['instance_feature_decoder'])
         
     
