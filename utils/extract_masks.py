@@ -31,6 +31,7 @@ class MaskDataset(Dataset):
         self.semantic_similarity = semantic_similarity
         self.img_dir = mask_dir.replace('masks', 'images')
         img_suffix = os.listdir(os.path.join(source_root, self.img_dir))[0].split('.')[-1]
+        self.images_name = [camera.image_name for camera in cameras]
         self.imgs_name = [f'{camera.image_name}.{img_suffix}' for camera in cameras]
         self.masks_path = os.path.join(source_root, f'{mask_dir}.npz')
         self.preprocess = torchvision.transforms.Compose(
@@ -130,6 +131,11 @@ class MaskDataset(Dataset):
         # self.clip_embeddings = self.clip_embeddings / self.clip_embeddings_cnt
         self.aggregation_clip_embeddings = torch.nn.functional.normalize(self.aggregation_clip_embeddings, dim=-1)
         self.clip_embeddings = torch.nn.functional.normalize(self.clip_embeddings, dim=-1)
+        clip_embeddings = {}
+        for i in range(len(self.clip_embeddings)):
+            clip_embeddings[self.images_name[i]] = self.clip_embeddings[i]
+        self.clip_embeddings = clip_embeddings
+        # print(self.clip_embeddings)
         # semantic_mask_rgb_save_path = os.path.join(self.source_root, self.mask_dir, 'SemanticMasks')
         # os.makedirs(semantic_mask_rgb_save_path, exist_ok=True)
         # for i in trange(len(self.semantic_masks)):

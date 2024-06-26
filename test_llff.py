@@ -3,6 +3,7 @@ import cv2
 import torch
 import json
 import torchvision
+from SPHINX import SPHINXModel
 import open_clip
 import time
 import numpy as np
@@ -53,8 +54,8 @@ def instance_segmentation(image, gaussian, instance_embeddings, render_instance_
     instance_object_map[~masks_all_instance, :] = torch.tensor([1, 1, 1], dtype=torch.float32, device=device)
     
     return masks_all_instance, instance_mask_map, instance_object_map
-def qwen_template(prompt):
-    return f'Please grounding <ref> {prompt} </ref>'
+def sphinx_template(prompt):
+    return f'Please provide the bounding box coordinate of the region this sentence describes: {prompt}.'
 def lisa_template(prompt):
     return f'Can you segment {prompt}?'
 def extract_box(text, w, h):
@@ -70,41 +71,26 @@ def extract_box(text, w, h):
     box[2] = int(box[2] / 1000 * w)
     box[3] = int(box[3] / 1000 * h)
     return box
-def reasoning_grouding_by_qwen(file_path, text_prompt):
-    """Sample of use local file.
-       linux&mac file schema: file:///home/images/test.png
-       windows file schema: file://D:/images/abc.png
-    """
-
-    messages = [{
-        'role': 'system',
-        'content': [{
-            'text': '''
-                    You are an AI assistant who is good at making accurate vision grounding based on questions asked
-                    '''
-        }]
-    }, {
-        'role':
-        'user',
-        'content': [
-            {
-                'image': f'file://{file_path}'
-            },
-            {
-                'text': text_prompt
-            },
-        ]
-    }]
-    response = MultiModalConversation.call(model='qwen-vl-chat-v1', messages=messages)
-    image = Image.open(file_path)
-    
-    # print(response.output.choices)
-    # answer = response.output.choices[0].message.content[0]['box']
-    answer = response.output.choices[0].message.content
-    # result_image = response.output.choices[0].message.content[1]['result_image']
-    # result_image = Image.open(requests.get(result_image, stream=True).raw)
-    box = extract_box(answer, *(image.size))
-    return answer, box
+def reasoning_grouding_by_sphinx(model, image, text_prompt):
+    response = model.generate_response([[text_prompt, None]], image, max_gen_len=1024, temperature=1, top_p=1, seed=0)
+    max_edge = max((image.width, image.height))
+    img_box = image.copy()
+    draw = ImageDraw.Draw(img_box)
+    if image.width < image.height:
+        x_origin = (image.height - image.width) // 2
+        y_origin = 0
+    else:
+        x_origin = 0
+        y_origin = (image.width - image.height) // 2
+    x1, y1, x2, y2 = eval(response)
+    x1 = int(x1 * max_edge - x_origin)
+    y1 = int(y1 * max_edge - y_origin)
+    x2 = int(x2 * max_edge - x_origin)
+    y2 = int(y2 * max_edge - y_origin)
+    box = [x1, y1, x2, y2]
+    draw.rectangle(box, outline='red', width=2)
+    # print(box)
+    return img_box, box
 
 def draw_rectangle(image, rectangle_coordinates, outline_color="red", thickness=2):
     # 打开图像
@@ -149,7 +135,7 @@ if __name__ == '__main__':
     parser.add_argument("--cfg_path", type=str, required=True)
     parser.add_argument("--scene", type=str, required=True)
     parser.add_argument("--lisa", action='store_true')
-    parser.add_argument("--qwen_sam", action='store_true')
+    parser.add_argument("--sphinx_sam", action='store_true')
     parser.add_argument("--clip_model_type", type=str, default="ViT-B-16")
     parser.add_argument("--clip_model_pretrained", type=str, default="laion2b_s34b_b88k")
     parser.add_argument("--lisa_model_type", type=str, default="xinlai/LISA-13B-llama2-v1-explanatory")
@@ -198,7 +184,7 @@ if __name__ == '__main__':
         save_path.insert(2, 'lisa')
         save_path.append(args.reasoning_prompt)
         save_path = '/'.join(save_path)
-    elif args.qwen_sam:
+    elif args.sphinx_sam:
         from segment_anything import sam_model_registry, SamPredictor
 
         sam_checkpoint = "ckpts/sam_vit_h_4b8939.pth"
@@ -211,12 +197,14 @@ if __name__ == '__main__':
 
         predictor = SamPredictor(sam)
         save_path = args.save_path.split('/')
-        save_path.insert(2, 'qwen_sam')
+        save_path.insert(2, 'sphinx_sam')
         save_path.append(args.reasoning_prompt)
         save_path = '/'.join(save_path)
+        sphinx = SPHINXModel.from_pretrained(pretrained_path="LLaMA2-Accessory/ckpts/SPHINX-Tiny", with_visual=True)
         # save_path = os.path.join(args.save_path, '', )
     else:
         save_path = os.path.join(args.save_path, args.reasoning_prompt)
+        sphinx = SPHINXModel.from_pretrained(pretrained_path="LLaMA2-Accessory/ckpts/SPHINX-Tiny", with_visual=True)
     os.makedirs(save_path, exist_ok=True)
     instance_embeddings = None
     rendered_feature_pca_dict = None
@@ -233,9 +221,11 @@ if __name__ == '__main__':
     os.makedirs(mask_map_save_path, exist_ok=True)
     os.makedirs(mask_save_path, exist_ok=True)
     os.makedirs(mask_object_save_path, exist_ok=True)
-    if not args.lisa and not args.qwen_sam:
-        similarity_scores = torch.zeros((len(colmap_train_cameras)))
-        instance_index = torch.zeros((len(colmap_train_cameras)))
+    if not args.lisa and not args.sphinx_sam:
+        # similarity_scores = torch.zeros((len(colmap_train_cameras)))
+        # instance_index = torch.zeros((len(colmap_train_cameras)))
+        similarity_scores = []
+        instance_index = []
         preprocess = torchvision.transforms.Compose(
             [
                 torchvision.transforms.Resize((224, 224)),
@@ -266,23 +256,30 @@ if __name__ == '__main__':
                     rendered_feature_pca_dict = get_pca_dict(render_feature)
                 if instance_feature_pca_dict is None:
                     instance_feature_pca_dict = get_pca_dict(instance_feature)
-                reasoning_prompt = qwen_template(args.reasoning_prompt)
-                image.save('tmp.jpg')
-                tmp_image_path = os.path.join(os.getcwd(), 'tmp.jpg')
-                answer, box = reasoning_grouding_by_qwen(tmp_image_path, reasoning_prompt)
-                reasoning_result = draw_rectangle(image, [box])
-                reasoning_result.save(os.path.join(bounding_box_save_path, f'reasoning_result_{cam.image_name}.png'))
-                bounding_box_image_np = image_np[box[1]:box[3], box[0]:box[2], :]
-                bounding_box_image_pil = Image.fromarray(bounding_box_image_np)
-                bounding_box_image_pil.save(os.path.join(bounding_box_save_path, f'bounding_box_{cam.image_name}.png'))
-                bounding_box_image_tensor = preprocess(bounding_box_image_pil).half().cuda()[None]
-                bounding_box_image_clip_embedding = clip_model.encode_image(bounding_box_image_tensor)
-                bounding_box_image_clip_embedding_norm = bounding_box_image_clip_embedding / bounding_box_image_clip_embedding.norm(dim=-1, keepdim=True)
-                cur_clip_embeddings = gaussian.clip_embeddings[i].half()
-                similarity_score = bounding_box_image_clip_embedding_norm @ cur_clip_embeddings.T
-                most_relevant_instance_index = similarity_score.argmax(-1)
-                similarity_scores[i] = similarity_score[:, most_relevant_instance_index].float()
-                instance_index[i] = most_relevant_instance_index
+                reasoning_prompt = sphinx_template(args.reasoning_prompt)
+                # image.save('tmp.jpg')
+                # tmp_image_path = os.path.join(os.getcwd(), 'tmp.jpg')
+                try:
+                    answer, box = reasoning_grouding_by_sphinx(sphinx, image, reasoning_prompt)
+                    reasoning_result = draw_rectangle(image, [box])
+                    reasoning_result.save(os.path.join(bounding_box_save_path, f'reasoning_result_{cam.image_name}.png'))
+                    bounding_box_image_np = image_np[box[1]:box[3], box[0]:box[2], :]
+                    bounding_box_image_pil = Image.fromarray(bounding_box_image_np)
+                    bounding_box_image_pil.save(os.path.join(bounding_box_save_path, f'bounding_box_{cam.image_name}.png'))
+                    bounding_box_image_tensor = preprocess(bounding_box_image_pil).half().cuda()[None]
+                    bounding_box_image_clip_embedding = clip_model.encode_image(bounding_box_image_tensor)
+                    bounding_box_image_clip_embedding_norm = bounding_box_image_clip_embedding / bounding_box_image_clip_embedding.norm(dim=-1, keepdim=True)
+                    cur_clip_embeddings = gaussian.clip_embeddings[i].half()
+                    similarity_score = bounding_box_image_clip_embedding_norm @ cur_clip_embeddings.T
+                    most_relevant_instance_index = similarity_score.argmax(-1)
+                    similarity_scores.append(similarity_score[:, most_relevant_instance_index].float())
+                    instance_index.append(most_relevant_instance_index)
+                    # similarity_scores[i] = similarity_score[:, most_relevant_instance_index].float()
+                    # instance_index[i] = most_relevant_instance_index
+                except:
+                    pass
+        similarity_scores = torch.tensor(similarity_scores)
+        instance_index = torch.tensor(instance_index)
         print(similarity_scores)
         print(instance_index)
         unique_index, counts = torch.unique(instance_index, return_counts=True)
@@ -308,11 +305,11 @@ if __name__ == '__main__':
                 print(masks_all_instance.shape)
                 instance_mask_map = result_list[0]
                 instance_object_map = mask_list[0]
-            elif args.qwen_sam:
-                reasoning_prompt = qwen_template(args.reasoning_prompt)
-                image.save('tmp.jpg')
-                tmp_image_path = os.path.join(os.getcwd(), 'tmp.jpg')
-                answer, box = reasoning_grouding_by_qwen(tmp_image_path, reasoning_prompt)
+            elif args.sphinx_sam:
+                reasoning_prompt = sphinx_template(args.reasoning_prompt)
+                # image.save('tmp.jpg')
+                # tmp_image_path = os.path.join(os.getcwd(), 'tmp.jpg')
+                answer, box = reasoning_grouding_by_sphinx(sphinx, image, reasoning_prompt)
                 box = np.array(box)
                 predictor.set_image(np.array(image))
                 masks, _, _ = predictor.predict(
@@ -330,10 +327,10 @@ if __name__ == '__main__':
                 instance_object_map[~mask, :] = np.array([255, 255, 255])
             else:
                 # if instance_embeddings is None:
-                #     reasoning_prompt = qwen_template(args.reasoning_prompt)
+                #     reasoning_prompt = sphinx_template(args.reasoning_prompt)
                 #     image.save('tmp.jpg')
                 #     tmp_image_path = os.path.join(os.getcwd(), 'tmp.jpg')
-                #     answer, box = reasoning_grouding_by_qwen(tmp_image_path, reasoning_prompt)
+                #     answer, box = reasoning_grouding_by_sphinx(tmp_image_path, reasoning_prompt)
                 #     reasoning_result = draw_rectangle(image, [box])
                 #     reasoning_result.save(os.path.join(args.save_path, 'reasoning_result.jpg'))
                 #     instance_embeddings = get_instance_embeddings(gaussian, box, instance_feature)

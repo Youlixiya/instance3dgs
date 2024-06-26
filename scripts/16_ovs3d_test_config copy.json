@@ -14,13 +14,7 @@
                              "camera", 
                              "hand", 
                              "red bag", 
-                             "white sheet"],
-        "reasoning_prompts": ["what is the yellow fruit", 
-                             "what can be worn on the foot", 
-                             "what can be used to take photos", 
-                             "what is the part of person", 
-                             "what can be used to carry wallet", 
-                             "where to sleep"]
+                             "white sheet"]
     },
     "bench":{
         "gs_source": "output/ovs3d/bench/point_cloud/iteration_10000/point_cloud.ply",
@@ -38,14 +32,7 @@
                              "orange cat", 
                              "pebbled concrete wall", 
                              "Portuguese egg tart", 
-                             "wood"],
-        "reasoning_prompts": ["who has blond hair", 
-                            "which is green fruit", 
-                            "which one is the model of the vehicle",
-                            "what is like an animal",
-                            "what is made of stone", 
-                            "what is like baked food",
-                            "what is made of wood"]
+                             "wood"]
     },
     "lawn":{
         "gs_source": "output/ovs3d/lawn/point_cloud/iteration_10000/point_cloud.ply",
@@ -62,14 +49,7 @@
                              "stapler",
                              "black headphone", 
                              "hand soap", 
-                             "green lawn"],
-        "reasoning_prompts": ["what is the red fruit", 
-                            "what is worn on the head and is white", 
-                            "which one is the model of the vehicle",
-                            "what is like an animal",
-                            "what is made of stone", 
-                            "what is like baked food",
-                            "what is made of wood"]
+                             "green lawn"]
     },
     "room":{
         "gs_source": "output/ovs3d/room/point_cloud/iteration_10000/point_cloud.ply",

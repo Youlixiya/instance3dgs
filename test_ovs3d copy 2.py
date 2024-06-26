@@ -2,14 +2,11 @@ import os
 import cv2
 import torch
 import json
-from copy import deepcopy
 from tqdm import tqdm
 import numpy as np
-import torchvision
 import torch.nn.functional as F
 from utils.general_utils import AttrDict
-import open_clip
-from PIL import Image, ImageDraw
+from PIL import Image
 from sklearn.metrics import jaccard_score, accuracy_score
 from scene.cameras import Simple_Camera, C2W_Camera, MiniCam
 from gaussian_renderer import render
@@ -20,54 +17,8 @@ from utils.colormaps import ColormapOptions, apply_colormap, get_pca_dict
 from utils.color import generate_contrasting_colors
 from argparse import ArgumentParser
 from arguments import ModelParams, PipelineParams, get_combined_args
-from transformers import LlavaNextProcessor, LlavaNextForConditionalGeneration
-from segment_anything import sam_model_registry, SamPredictor
+
 COLORS = torch.tensor(generate_contrasting_colors(500), dtype=torch.uint8, device='cuda')
-
-def get_box_by_mask(mask):
-    non_zero_indices = torch.nonzero(mask.float())
-    min_indices = torch.min(non_zero_indices, dim=0).values
-    max_indices = torch.max(non_zero_indices, dim=0).values
-    top_left = min_indices
-    bottom_right = max_indices + 1
-    return top_left[1].item(), top_left[0].item(), bottom_right[1].item(), bottom_right[0].item()
-
-def draw_rectangle(image, rectangle_coordinates, outline_color="red", thickness=2):
-    # 打开图像
-    image = deepcopy(image)
-    # 创建绘图对象
-    draw = ImageDraw.Draw(image)
-    for rectangle_coordinate in rectangle_coordinates:
-        draw.rectangle(rectangle_coordinate, outline=outline_color, width=thickness)
-
-    return image
-
-def llava_template(prompt):
-    return f"A chat between a curious human and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the human's questions. USER: <image>\nPlease provide the bounding box coordinate of the region this sentence describes: {prompt} ASSISTANT:"
-
-def reasoning_grouding_by_llava(model, processor, image, prompt):
-    inputs = processor(prompt, image, return_tensors="pt").to(model.device)
-    output = model.generate(**inputs, max_new_tokens=100)
-    response = processor.decode(output[0], skip_special_tokens=True)
-    response = response.split(' ASSISTANT:')[-1]
-    max_edge = max((image.width, image.height))
-    img_box = image.copy()
-    draw = ImageDraw.Draw(img_box)
-    if image.width < image.height:
-        x_origin = (image.height - image.width) // 2
-        y_origin = 0
-    else:
-        x_origin = 0
-        y_origin = (image.width - image.height) // 2
-    x1, y1, x2, y2 = eval(response)
-    x1 = int(x1 * max_edge - x_origin)
-    y1 = int(y1 * max_edge - y_origin)
-    x2 = int(x2 * max_edge - x_origin)
-    y2 = int(y2 * max_edge - y_origin)
-    box = [x1, y1, x2, y2]
-    draw.rectangle(box, outline='red', width=2)
-    # print(box)
-    return img_box, box
 
 @torch.no_grad()
 def select_semantic_embeddings(clip_model, gaussian, text_prompt, neg_features, text_query_threshold, device='cuda'):
@@ -305,50 +256,9 @@ if __name__ == '__main__':
     # parser.add_argument("--gt_path", type=str, required=True)
     # parser.add_argument("--output_path", type=str, required=True)
     # parser.add_argument("--scene", type=str, required=True)
-    # scene_names = ['bed', 'bench', 'lawn', 'room', 'sofa']
-    scene_names = ['bed']
+    scene_names = ['bed', 'bench', 'lawn', 'room', 'sofa']
     args = parser.parse_args()
     metrics = 'Scene\tIoU\tAcc\n'
-
-    #llava
-    processor = LlavaNextProcessor.from_pretrained("ckpts/llava-v1.6-vicuna-7b-hf")
-
-    llava = LlavaNextForConditionalGeneration.from_pretrained("ckpts/llava-v1.6-vicuna-7b-hf",
-                                                                torch_dtype=torch.float16,
-                                                                low_cpu_mem_usage=True,
-                                                                load_in_4bit=True,
-                                                                use_flash_attention_2=True)
-
-    #sam
-    sam_checkpoint = "ckpts/sam_vit_h_4b8939.pth"
-    model_type = "vit_h"
-
-    device = "cuda"
-
-    sam = sam_model_registry[model_type](checkpoint=sam_checkpoint)
-
-    sam.to(device=device)
-
-    predictor = SamPredictor(sam)
-
-    #clip
-    preprocess = torchvision.transforms.Compose(
-            [
-                torchvision.transforms.Resize((224, 224)),
-                torchvision.transforms.ToTensor(),
-                torchvision.transforms.Normalize(
-                    mean=[0.48145466, 0.4578275, 0.40821073],
-                    std=[0.26862954, 0.26130258, 0.27577711],
-                ),
-            ]
-        )
-    clip_model, _, _ = open_clip.create_model_and_transforms("ViT-B-16",
-                                                            pretrained="laion2b_s34b_b88k",
-                                                            precision="fp16",
-                                                            device='cuda')
-    clip_model = clip_model.cuda()
-    all_IoUs = []
-    all_accuracies = []
     for scene_name in tqdm(scene_names):
         with open(args.cfg_path, 'r') as f:
             cfg = AttrDict(json.load(f)[scene_name])
@@ -358,7 +268,7 @@ if __name__ == '__main__':
         gaussian.load_ply(args.gs_source)
         if args.feature_gs_source:
             gaussian.load_feature_params(args.feature_gs_source)
-        print(gaussian.clip_embeddings)
+        
         background = torch.tensor([0, 0, 0], dtype=torch.float32, device="cuda")
         feature_bg = torch.tensor([0] *gaussian.gs_feature_dim, dtype=torch.float32, device="cuda")
         colmap_cameras = None
@@ -372,104 +282,29 @@ if __name__ == '__main__':
             # else:
             #     h = args.h
             #     w = args.w
-
-            
             scene = CamScene(args.colmap_dir, h=h, w=w)
             cameras_extent = scene.cameras_extent
             colmap_cameras = scene.cameras
-            colmap_train_cameras = []
-            colmap_eval_cameras = []
-            for camera in colmap_cameras:
-                if camera.image_name in target_image_names:
-                    colmap_eval_cameras.append(camera)
-                else:
-                    colmap_train_cameras.append(camera)
-            # img_suffix = os.listdir(os.path.join(args.colmap_dir, args.images))[0].split('.')[-1]
-            # imgs_name = [f'{camera.image_name}.{img_suffix}' for camera in colmap_cameras]
+            img_suffix = os.listdir(os.path.join(args.colmap_dir, args.images))[0].split('.')[-1]
+            imgs_name = [f'{camera.image_name}.{img_suffix}' for camera in colmap_cameras]
             # print(imgs_name)
-            # imgs_path = [os.path.join(args.colmap_dir, args.images, img_name) for img_name in imgs_name]
-        
+            imgs_path = [os.path.join(args.colmap_dir, args.images, img_name) for img_name in imgs_name]
         instance_embeddings = []
         rendered_feature_pca_dict = None
         instance_feature_pca_dict = None
         IoUs, accuracies = [], []
-        similarity_scores = []
-        instance_indexs = []
         dc = DistinctColors()
-        reasoning_prompts = args.reasoning_prompts
-        # clip_text_prompt.sort()
+        #clip
+        clip = OpenCLIPNetwork(OpenCLIPNetworkConfig())
+        clip_text_prompt = args.clip_text_prompt
+        clip_text_prompt.sort()
+        # print(clip_text_prompt)
+        clip.set_positives(clip_text_prompt)
         valid_index = 0
-
-        for i in tqdm(range(len(colmap_train_cameras))):
-            cam = colmap_train_cameras[i]
-            with torch.no_grad():
-                reasoning_bounding_boxes_save_path = os.path.join(args.save_path, cam.image_name, 'reasoning_bounding_boxes')
-                reasoning_masks_save_path = os.path.join(args.save_path, cam.image_name, 'reasoning_masks')
-                mask_map_save_path = os.path.join(args.save_path, cam.image_name, 'mask_maps')
-                mask_save_path = os.path.join(args.save_path, cam.image_name, 'masks')
-                mask_object_save_path = os.path.join(args.save_path, cam.image_name, 'objects')
-                os.makedirs(reasoning_bounding_boxes_save_path, exist_ok=True)
-                os.makedirs(reasoning_masks_save_path, exist_ok=True)
-                os.makedirs(mask_map_save_path, exist_ok=True)
-                os.makedirs(mask_save_path, exist_ok=True)
-                os.makedirs(mask_object_save_path, exist_ok=True)
-                image_name = cam.image_name
-                render_pkg = render(cam, gaussian, pipe, background)
-                image_tensor = render_pkg['render'].permute(1, 2, 0).clamp(0, 1)
-                image_np = (image_tensor.cpu().numpy() * 255).astype(np.uint8)
-                image = Image.fromarray(image_np)
-                render_feature = render(cam, gaussian, pipe, feature_bg, render_feature=True, override_feature=gaussian.gs_features)['render_feature']
-                instance_feature = F.normalize(render_feature.reshape(-1, h*w), dim=0).reshape(-1, h, w)
-                if rendered_feature_pca_dict is None:
-                    rendered_feature_pca_dict = get_pca_dict(render_feature)
-                if instance_feature_pca_dict is None:
-                    instance_feature_pca_dict = get_pca_dict(instance_feature)
-                for reasoning_prompt in reasoning_prompts:
-                    tmp_similarity_scores = []
-                    tmp_instance_indexs = []
-                    llava_reasoning_prompt = llava_template(reasoning_prompt)
-                    answer, box = reasoning_grouding_by_llava(llava, processor, image, llava_reasoning_prompt)
-                    reasoning_result = draw_rectangle(image, [box])
-                    reasoning_result.save(os.path.join(reasoning_bounding_boxes_save_path, f'reasoning_bounding_box_{cam.image_name}_{reasoning_prompt}.png'))
-                    predictor.set_image(np.array(image))
-                    masks, _, _ = predictor.predict(
-                        point_coords=None,
-                        point_labels=None,
-                        box=np.array(box)[None, :],
-                        multimask_output=False,
-                    )
-                    mask = torch.from_numpy(masks[0])
-                    image_mask_np = image_np.copy()
-                    image_mask_np[~mask, :] = np.array([0, 0, 0])
-                    mask_bounding_box = get_box_by_mask(mask)
-                    bounding_box_image_mask_np = image_mask_np[mask_bounding_box[1]:mask_bounding_box[3], mask_bounding_box[0]:mask_bounding_box[2], :]
-                    
-                    bounding_box_image_mask_pil = Image.fromarray(bounding_box_image_mask_np)
-                    bounding_box_image_mask_pil.save(os.path.join(reasoning_masks_save_path, f'reasoning_mask_{cam.image_name}_{reasoning_prompt}.png'))
-                    bounding_box_image_mask_tensor = preprocess(bounding_box_image_mask_pil).half().cuda()[None]
-                    bounding_box_image_mask_clip_embedding = clip_model.encode_image(bounding_box_image_mask_tensor)
-                    bounding_box_image_mask_clip_embedding_norm = bounding_box_image_mask_clip_embedding / bounding_box_image_mask_clip_embedding.norm(dim=-1, keepdim=True)
-                    cur_clip_embeddings = gaussian.clip_embeddings[image_name].half()
-                    similarity_score = bounding_box_image_mask_clip_embedding_norm @ cur_clip_embeddings.T
-                    most_relevant_instance_index = similarity_score.argmax(-1)
-                    tmp_similarity_scores.append(similarity_score[:, most_relevant_instance_index].float())
-                    tmp_instance_indexs.append(most_relevant_instance_index)
-                similarity_scores.append(tmp_similarity_scores)
-                instance_indexs.append(tmp_instance_indexs)
-        similarity_scores = torch.tensor(similarity_scores).T
-        instance_indexes = torch.tensor(instance_indexes).T
-        print(similarity_scores)
-        print(instance_index)
-        instance_embeddings = []
-        for instance_index in instance_indexes:
-            unique_index, counts = torch.unique(instance_index, return_counts=True)
-            index = unique_index[torch.argmax(counts)].long()
-            instance_embedding = gaussian.instance_embeddings[index]
-            instance_embeddings.append(instance_embedding)
-        instance_embeddings = torch.cat(instance_embeddings)
-
-        for i in tqdm(range(len(colmap_eval_cameras))):
-            cam = colmap_eval_cameras[i]
+        for i in tqdm(range(len(colmap_cameras))):
+            cam = colmap_cameras[i]
+            if cam.image_name not in target_image_names or valid_index == len(seg_maps):
+                continue
             gt_seg = seg_maps[valid_index]
             valid_index += 1
             with torch.no_grad():
@@ -492,15 +327,15 @@ if __name__ == '__main__':
                     instance_feature_pca_dict = get_pca_dict(instance_feature)
                 Image.fromarray((apply_colormap(render_feature.permute(1, 2, 0), ColormapOptions(colormap="pca", pca_dict=rendered_feature_pca_dict)).cpu().numpy() * 255).astype(np.uint8)).save(os.path.join(args.save_path, cam.image_name, f'rendered_feature_pca.jpg'))
                 Image.fromarray((apply_colormap(instance_feature.permute(1, 2, 0), ColormapOptions(colormap="pca", pca_dict=instance_feature_pca_dict)).cpu().numpy() * 255).astype(np.uint8)).save(os.path.join(args.save_path, cam.image_name, f'instance_feature_pca.jpg'))
-                # if instance_embeddings == []:
-                #     for j in range(len(clip.positives)):
-                #         relevancy = clip.get_relevancy(gaussian.aggregation_clip_embeddings, j)[..., 0]
-                #         print(relevancy.max())
-                #         # mask_index = relevancy > args.text_query_threshold[j]
-                #         mask_index = relevancy.argmax()
-                #         instance_embeddings.append(gaussian.instance_embeddings[mask_index][None])
-                #     print(torch.cat(instance_embeddings).shape)
-                #     instance_embeddings = torch.cat(instance_embeddings)
+                if instance_embeddings == []:
+                    for j in range(len(clip.positives)):
+                        relevancy = clip.get_relevancy(gaussian.aggregation_clip_embeddings, j)[..., 0]
+                        print(relevancy.max())
+                        # mask_index = relevancy > args.text_query_threshold[j]
+                        mask_index = relevancy.argmax()
+                        instance_embeddings.append(gaussian.instance_embeddings[mask_index][None])
+                    print(torch.cat(instance_embeddings).shape)
+                    instance_embeddings = torch.cat(instance_embeddings)
                 p_class = (instance_embeddings @ instance_feature.reshape(-1, h*w)).softmax(0)
                 # print(p_class.shape)
                 class_index = torch.argmax(p_class, dim=0).cpu() # [N1]
@@ -514,11 +349,8 @@ if __name__ == '__main__':
                 print('accuracy:', accuracies[-1])
                 Image.fromarray(segmentation_map).save(os.path.join(mask_map_save_path, 'segmentation_map.png'))
         metrics += f'{scene_name}\t{np.mean(IoUs)}\t{np.mean(accuracies)}\n'
-        all_IoUs.append(np.mean(IoUs))
-        all_accuracies.append(np.mean(accuracies))
-    metrics += f'mean\t{np.mean(all_IoUs)}\t{np.mean(all_accuracies)}'
-    with open(f'ovs3d.txt', 'w') as f:
-        f.write(metrics)
+        with open(f'ovs3d.txt', 'w') as f:
+            f.write(metrics)
                     # semantic_valid_num = [len(instance_embeddings)]
                     # masks_all_semantic, semantic_mask_map, semantic_object_map = text_semantic_segmentation(image_tensor, instance_embeddings, instance_feature, args.text_mask_threshold[j], semantic_valid_num)
                     # clip_mask = (masks_all_semantic.cpu().numpy() * 255).astype(np.uint8)
@@ -555,4 +387,3 @@ if __name__ == '__main__':
                 # Image.fromarray((instance_masks.cpu().numpy()).astype(np.uint8)).save(os.path.join(mask_save_path, f'mask_{i}.png'))
         # device = "cuda:0"
         # self.colors = np.random.random((500, 3))
-    

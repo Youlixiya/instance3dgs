@@ -22,6 +22,7 @@ Grounded-SAM/segment_anything/build
 Grounded-SAM/segment_anything/groundingdino.egg-info
 submodules/diff-gaussian-rasterization/diff_gaussian_rasterization/_C.cpython-39-x86_64-linux-gnu.so
 tmp
+ckpts
 *.jpg
 *.pt
 *.pth

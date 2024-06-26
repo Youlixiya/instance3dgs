@@ -47,7 +47,7 @@
         "images": "images_4",
         "save_path": "output/16_llff_masks/leaves",
         "mask_threshold": 0.85,
-        "reasoning_prompt": "which is the largest leaf"
+        "reasoning_prompt": "which leaf is closest to camera"
     },
     "orchids":{
         "gs_source": "output/llff/orchids/point_cloud/iteration_10000/point_cloud.ply",
@@ -57,7 +57,7 @@
         "images": "images_4",
         "save_path": "output/16_llff_masks/orchids",
         "mask_threshold": 0.90,
-        "reasoning_prompt": "which is the medium flower"
+        "reasoning_prompt": "the flower at the center of the view"
     },
     "room":{
         "gs_source": "output/llff/room/point_cloud/iteration_10000/point_cloud.ply",
