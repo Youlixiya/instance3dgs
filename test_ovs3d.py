@@ -305,15 +305,15 @@ if __name__ == '__main__':
     # parser.add_argument("--gt_path", type=str, required=True)
     # parser.add_argument("--output_path", type=str, required=True)
     # parser.add_argument("--scene", type=str, required=True)
-    # scene_names = ['bed', 'bench', 'lawn', 'room', 'sofa']
-    scene_names = ['bed']
+    scene_names = ['bed', 'bench', 'lawn', 'room', 'sofa']
+    # scene_names = ['bed']
     args = parser.parse_args()
     metrics = 'Scene\tIoU\tAcc\n'
 
     #llava
     processor = LlavaNextProcessor.from_pretrained("ckpts/llava-v1.6-vicuna-7b-hf")
 
-    llava = LlavaNextForConditionalGeneration.from_pretrained("ckpts/llava-v1.6-vicuna-7b-hf",
+    llava = LlavaNextForConditionalGeneration.from_pretrained("ckpts/llava-v1.6-vicuna-13b-hf",
                                                                 torch_dtype=torch.float16,
                                                                 low_cpu_mem_usage=True,
                                                                 load_in_4bit=True,
@@ -358,7 +358,7 @@ if __name__ == '__main__':
         gaussian.load_ply(args.gs_source)
         if args.feature_gs_source:
             gaussian.load_feature_params(args.feature_gs_source)
-        print(gaussian.clip_embeddings)
+        # print(gaussian.clip_embeddings)
         background = torch.tensor([0, 0, 0], dtype=torch.float32, device="cuda")
         feature_bg = torch.tensor([0] *gaussian.gs_feature_dim, dtype=torch.float32, device="cuda")
         colmap_cameras = None
@@ -383,6 +383,8 @@ if __name__ == '__main__':
                 if camera.image_name in target_image_names:
                     colmap_eval_cameras.append(camera)
                 else:
+                    if len(colmap_train_cameras) == 1:
+                        continue
                     colmap_train_cameras.append(camera)
             # img_suffix = os.listdir(os.path.join(args.colmap_dir, args.images))[0].split('.')[-1]
             # imgs_name = [f'{camera.image_name}.{img_suffix}' for camera in colmap_cameras]
@@ -394,9 +396,10 @@ if __name__ == '__main__':
         instance_feature_pca_dict = None
         IoUs, accuracies = [], []
         similarity_scores = []
-        instance_indexs = []
+        instance_indexes = []
         dc = DistinctColors()
         reasoning_prompts = args.reasoning_prompts
+        print(reasoning_prompts)
         # clip_text_prompt.sort()
         valid_index = 0
 
@@ -424,7 +427,7 @@ if __name__ == '__main__':
                     rendered_feature_pca_dict = get_pca_dict(render_feature)
                 if instance_feature_pca_dict is None:
                     instance_feature_pca_dict = get_pca_dict(instance_feature)
-                for reasoning_prompt in reasoning_prompts:
+                for reasoning_prompt in tqdm(reasoning_prompts):
                     tmp_similarity_scores = []
                     tmp_instance_indexs = []
                     llava_reasoning_prompt = llava_template(reasoning_prompt)
@@ -454,19 +457,20 @@ if __name__ == '__main__':
                     most_relevant_instance_index = similarity_score.argmax(-1)
                     tmp_similarity_scores.append(similarity_score[:, most_relevant_instance_index].float())
                     tmp_instance_indexs.append(most_relevant_instance_index)
-                similarity_scores.append(tmp_similarity_scores)
-                instance_indexs.append(tmp_instance_indexs)
-        similarity_scores = torch.tensor(similarity_scores).T
-        instance_indexes = torch.tensor(instance_indexes).T
+                    similarity_scores.append(tmp_similarity_scores)
+                    instance_indexes.append(tmp_instance_indexs)
+        similarity_scores = torch.tensor(similarity_scores)
+        instance_indexes = torch.tensor(instance_indexes)
         print(similarity_scores)
-        print(instance_index)
+        print(instance_indexes)
         instance_embeddings = []
         for instance_index in instance_indexes:
             unique_index, counts = torch.unique(instance_index, return_counts=True)
             index = unique_index[torch.argmax(counts)].long()
             instance_embedding = gaussian.instance_embeddings[index]
             instance_embeddings.append(instance_embedding)
-        instance_embeddings = torch.cat(instance_embeddings)
+        instance_embeddings = torch.stack(instance_embeddings)
+        print(instance_embeddings.shape)
 
         for i in tqdm(range(len(colmap_eval_cameras))):
             cam = colmap_eval_cameras[i]

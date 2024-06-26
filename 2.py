@@ -24,7 +24,7 @@ sam = sam_model_registry[model_type](checkpoint=sam_checkpoint)
 sam.to(device=device)
 
 predictor = SamPredictor(sam)
-url = "data/ovs3d/lawn/images_4/00.jpg"
+url = "data/ovs3d/sofa/images_4/00.jpg"
 image = Image.open(url)
 #bed
 # text = "Please provide the bounding box coordinate of the region this sentence describes: what can be used to take photos."
@@ -35,7 +35,7 @@ image = Image.open(url)
 # text = "Please provide the bounding box coordinate of the region this sentence describes: where to sleep."
 #bench
 # text = "Please provide the bounding box coordinate of the region this sentence describes: who has blond hair."
-text = "Please provide the bounding box coordinate of the region this sentence describes: what is the red fruit."
+text = "Please provide the bounding box coordinate of the region this sentence describes: what is a robot toy."
 # text = "Please provide the bounding box coordinate of the region this sentence describes: what is made of stone."
 
 prompt = f"A chat between a curious human and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the human's questions. USER: <image>\n{text} ASSISTANT:"

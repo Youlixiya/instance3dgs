@@ -65,11 +65,10 @@
                              "green lawn"],
         "reasoning_prompts": ["what is the red fruit", 
                             "what is worn on the head and is white", 
-                            "which one is the model of the vehicle",
-                            "what is like an animal",
-                            "what is made of stone", 
-                            "what is like baked food",
-                            "what is made of wood"]
+                            "what can be uesd to bind books",
+                            "what is worn on the ear and is black",
+                            "what is bottled", 
+                            "what is made of a lot of grass"]
     },
     "room":{
         "gs_source": "output/ovs3d/room/point_cloud/iteration_10000/point_cloud.ply",
@@ -86,7 +85,13 @@
                              "weaving basket",
                              "rabbit", 
                              "dinosaur", 
-                             "baseball"]
+                             "baseball"],
+        "reasoning_prompts": ["what is made of wood", 
+                             "what is in the basket", 
+                             "what can be uesd to hold a water bottle",
+                             "what has long ears",
+                             "what has a long tail", 
+                             "what is spherical"]
     },
     "sofa":{
         "gs_source": "output/ovs3d/sofa/point_cloud/iteration_10000/point_cloud.ply",
@@ -103,6 +108,11 @@
                              "leather" ,
                              "a red Nintendo Switch joy-con controller", 
                              "Gundam", 
-                             "Xbox wireless controller"]
+                             "Xbox wireless controller"],
+        "reasoning_prompts": ["the yellow doll", 
+                             "what is made of cards stacked together", 
+                             "What can be used to play games and is small red",
+                             "what is a robot toy",
+                             "what can be used to play games and is large and white"]
     }
 }

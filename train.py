@@ -77,11 +77,16 @@ def training(args, dataset, opt, pipe, saving_iterations):
         cache = torch.zeros(instance_num, gaussians.gs_feature_dim, device='cuda')
     else:
         cache = Cache(instance_num, view_num, gaussians.gs_feature_dim)
+    viewpoint_stack = None
     while cur_iter < opt.feature_iterations:
         cur_iter += 1
         iter_start.record()
         index = randint(0, len(mask_dataset)-1)
-        viewpoint_stack = scene.cameras.copy()
+        if not viewpoint_stack:
+            viewpoint_stack = scene.cameras.copy()
+            image_names = [cam.image_name for cam in viewpoint_stack]
+            image_names.sort()
+            print(image_names)
         viewpoint_cam = viewpoint_stack.pop(index)
         rendered_feature = render(viewpoint_cam, gaussians, pipe, feature_bg_color, render_feature=True, override_feature=gaussians.gs_features)['render_feature']
         # if gaussians.feature_aggregator is not None:
