@@ -28,4 +28,9 @@ CUDA_VISIBLE_DEVICES=4 python mask_refine.py --src_path data/ovs3d/room/masks_8 
 CUDA_VISIBLE_DEVICES=4 python train.py --gs_source output/ovs3d/room/point_cloud/iteration_10000/point_cloud.ply --colmap_dir data/ovs3d/room --images images_4
 CUDA_VISIBLE_DEVICES=4 python test_ovs3d.py --cfg_path scripts/16_ovs3d_test_config.json --scene room
 
-python test_ovs3d.py --cfg_path scripts/16_ovs3d_test_config.json
+
+python test_clip_ovs3d.py --cfg_path scripts/16_ovs3d_test_config.json
+
+python test_ovs3d.py --cfg_path scripts/16_ovs3d_test_config.json --train_views 1
+python test_ovs3d.py --cfg_path scripts/16_ovs3d_test_config.json --train_views 2
+python test_ovs3d.py --cfg_path scripts/16_ovs3d_test_config.json --train_views 4
