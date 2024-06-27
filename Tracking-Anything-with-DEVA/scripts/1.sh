@@ -14,5 +14,6 @@ CUDA_VISIBLE_DEVICES=4 python demo/demo_automatic.py --chunk_size 4 --img_path .
 CUDA_VISIBLE_DEVICES=4 python demo/demo_with_text.py --chunk_size 4 --img_path ../data/ovs3d/room/images_8 --amp --temporal_setting semionline --size 480 --output "../data/ovs3d/room/background" --prompt "background." --DINO_THRESHOLD 0.72
 
 
-CUDA_VISIBLE_DEVICES=1 python demo/demo_automatic.py --chunk_size 4 --img_path ../data/lerf_data/figurines/images --amp --temporal_setting semionline --size 480 --suppress_small_objects --output ../data/lerf_data/figurines/masks
-CUDA_VISIBLE_DEVICES=1 python demo/demo_automatic.py --chunk_size 4 --img_path ../data/lerf_data/teatime/images --amp --temporal_setting semionline --size 480 --suppress_small_objects --output ../data/lerf_data/teatime/masks
+CUDA_VISIBLE_DEVICES=1 python demo/demo_automatic.py --chunk_size 4 --img_path ../data/gsgrouping/figurines/images_train --amp --temporal_setting semionline --size 480 --suppress_small_objects --output ../data/gsgrouping/figurines/masks
+CUDA_VISIBLE_DEVICES=1 python demo/demo_automatic.py --chunk_size 4 --img_path ../data/gsgrouping/ramen/images_train --amp --temporal_setting semionline --size 480 --suppress_small_objects --output ../data/gsgrouping/ramen/masks
+CUDA_VISIBLE_DEVICES=1 python demo/demo_automatic.py --chunk_size 4 --img_path ../data/gsgrouping/teatime/images_train --amp --temporal_setting semionline --size 480 --suppress_small_objects --output ../data/gsgrouping/teatime/masks

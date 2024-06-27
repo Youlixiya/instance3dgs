@@ -18,7 +18,7 @@ classifiers = [
 ]
 dependencies = [
   'gitpython >= 3.1',
-  'thinplate@git+https://github.com/cheind/py-thin-plate-spline',
+
   'hickle >= 5.0',
   'tensorboard >= 2.12',
   'numpy >= 1.22',

@@ -198,6 +198,17 @@ def readColmapSceneInfo_hw(path, h, w, images, eval, llffhold=8):
             eval_names = os.listdir(os.path.join(path, "segmentations"))
             train_cam_infos = [c for idx, c in enumerate(cam_infos) if c.image_name not in eval_names]
             test_cam_infos = [c for idx, c in enumerate(cam_infos) if c.image_name in eval_names]
+        elif os.path.exists(os.path.join(path, "images_train")):
+            train_dir = os.path.join(path, "images_train")
+            train_names = sorted(os.listdir(train_dir))
+            train_names = [train_name.split('.')[0] for train_name in train_names]
+            train_cam_infos = []
+            test_cam_infos = []
+            for cam_info in cam_infos:
+                if cam_info.image_name in train_names:
+                    train_cam_infos.append(cam_info)
+                else:
+                    test_cam_infos.append(cam_info)
         else:
             train_cam_infos = [c for idx, c in enumerate(cam_infos) if idx % llffhold != 0]
             test_cam_infos = [c for idx, c in enumerate(cam_infos) if idx % llffhold == 0]
@@ -250,7 +261,19 @@ def readColmapSceneInfo(path, images, eval, llffhold=8):
             # print(eval_names)
             train_cam_infos = [c for idx, c in enumerate(cam_infos) if c.image_name not in eval_names]
             test_cam_infos = [c for idx, c in enumerate(cam_infos) if c.image_name in eval_names]
+        elif os.path.exists(os.path.join(path, "images_train")):
+            train_dir = os.path.join(path, "images_train")
+            train_names = sorted(os.listdir(train_dir))
+            train_names = [train_name.split('.')[0] for train_name in train_names]
+            train_cam_infos = []
+            test_cam_infos = []
+            for cam_info in cam_infos:
+                if cam_info.image_name in train_names:
+                    train_cam_infos.append(cam_info)
+                else:
+                    test_cam_infos.append(cam_info)
         else:
+            
             train_cam_infos = [c for idx, c in enumerate(cam_infos) if idx % llffhold != 0]
             test_cam_infos = [c for idx, c in enumerate(cam_infos) if idx % llffhold == 0]
     else:

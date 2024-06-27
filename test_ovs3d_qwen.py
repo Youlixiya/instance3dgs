@@ -1,4 +1,5 @@
 import os
+import re
 import cv2
 import torch
 import json
@@ -20,12 +21,12 @@ from utils.colormaps import ColormapOptions, apply_colormap, get_pca_dict
 from utils.color import generate_contrasting_colors
 from argparse import ArgumentParser
 from arguments import ModelParams, PipelineParams, get_combined_args
-from transformers import LlavaNextProcessor, LlavaNextForConditionalGeneration
+from transformers import AutoModelForCausalLM, AutoTokenizer
 from segment_anything import sam_model_registry, SamPredictor
 COLORS = torch.tensor(generate_contrasting_colors(500), dtype=torch.uint8, device='cuda')
-
+torch.manual_seed(1234)
 def qwen_template(prompt):
-    return f'Please grounding <ref> {prompt} </ref>'
+    return f'Output the bounding box of the object that best matches the text description, not the bounding box of an irrelevant object. Please grounding <ref> {prompt} </ref>'
 
 def extract_box(text, w, h):
     pattern = r'\((.*?)\)'
@@ -59,15 +60,12 @@ def draw_rectangle(image, rectangle_coordinates, outline_color="red", thickness=
 
     return image
 
-def llava_template(prompt):
-    return f"A chat between a curious human and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the human's questions. USER: <image>\nPlease provide the bounding box coordinate of the region this sentence describes: {prompt} ASSISTANT:"
-
 def reasoning_grouding_by_qwen(model, tokenizer, image_path, prompt):
     query = tokenizer.from_list_format([
         {'image': image_path},
-        {'text': qwen_template(prompt)},
+        {'text': prompt},
     ])
-    image = Image.open()
+    image = Image.open(image_path)
     inputs = tokenizer(query, return_tensors='pt')
     inputs = inputs.to(model.device)
     pred = model.generate(**inputs)
@@ -315,7 +313,7 @@ if __name__ == '__main__':
     # parser.add_argument("--output_path", type=str, required=True)
     # parser.add_argument("--scene", type=str, required=True)
     scene_names = ['bed', 'bench', 'lawn', 'room', 'sofa']
-    # scene_names = ['bed']
+    # scene_names = ['sofa']
     args = parser.parse_args()
     metrics = 'Scene\tIoU\tAcc\n'
 
@@ -430,7 +428,7 @@ if __name__ == '__main__':
                 os.makedirs(reasoning_masks_save_path, exist_ok=True)
                 os.makedirs(box_clip_embeddings_save_path, exist_ok=True)
                 os.makedirs(mask_clip_embeddings_save_path, exist_ok=True)
-                # image_name = cam.image_name
+                image_name = cam.image_name
                 image_path = os.path.join(img_root, f'{cam.image_name}.{img_suffix}')
                 # image_np = np.array(image)
                 # render_pkg = render(cam, gaussian, pipe, background)
@@ -449,19 +447,20 @@ if __name__ == '__main__':
                     reasoning_prompt = clip2reasoning_dict[clip_text_prompt]
                     if args.clip_type == 'mask':
                         clip_embedding_path = os.path.join(mask_clip_embeddings_save_path, f'{reasoning_prompt}.pt')
+                        
                     else:
                         clip_embedding_path = os.path.join(box_clip_embeddings_save_path, f'{reasoning_prompt}.pt')
                     if os.path.exists(clip_embedding_path):
-                        pass    
+                        clip_embedding = torch.load(clip_embedding_path) 
                     else:
                         
                         qwen_reasoning_prompt = qwen_template(reasoning_prompt)
-                        reasoning_result, box, image_pil = reasoning_grouding_by_qwen(qwen, tokenzier, image_path, qwen_reasoning_prompt)
+                        reasoning_result, box, image_pil = reasoning_grouding_by_qwen(qwen, tokenizer, image_path, qwen_reasoning_prompt)
                         reasoning_result.save(os.path.join(reasoning_results_save_path, f'{reasoning_prompt}.png'))
                         image_np = np.array(image_pil)
                         #get reasoning_box
-                        reasoning_box_np = image_mask_np[box[1]: box[3], box[0]: box[2], :]
-                        reasoning_box_pil = Image.fromarray(bounding_box_image_np)
+                        reasoning_box_np = image_np[box[1]: box[3], box[0]: box[2], :]
+                        reasoning_box_pil = Image.fromarray(reasoning_box_np)
                         reasoning_box_pil.save(os.path.join(reasoning_boxes_save_path, f'{reasoning_prompt}.png'))
                         #get reasoning_mask
                         predictor.set_image(image_np)
@@ -481,23 +480,25 @@ if __name__ == '__main__':
                         reasoning_mask_pil.save(os.path.join(reasoning_masks_save_path, f'{reasoning_prompt}.png'))
                         #get clip_embeddings
 
-                        reasoning_box_tensor = preprocess(reasoning_mask_pil).half().cuda()[None]
-                        reasoning_mask_clip_embedding = clip_model.encode_image(reasoning_mask_tensor)
-                        reasoning_mask_clip_embedding_norm = reasoning_mask_clip_embedding / reasoning_mask_clip_embedding.norm(dim=-1, keepdim=True)
-                        torch.save(reasoning_mask_clip_embedding_norm, os.path.join(mask_clip_embeddings_save_path, f'{reasoning_prompt}.pt'))
+                        reasoning_box_tensor = preprocess(reasoning_box_pil).half().cuda()[None]
+                        reasoning_box_clip_embedding = clip_model.encode_image(reasoning_box_tensor)
+                        reasoning_box_clip_embedding_norm = reasoning_box_clip_embedding / reasoning_box_clip_embedding.norm(dim=-1, keepdim=True)
+                        torch.save(reasoning_box_clip_embedding_norm, os.path.join(box_clip_embeddings_save_path, f'{reasoning_prompt}.pt'))
 
                         reasoning_mask_tensor = preprocess(reasoning_mask_pil).half().cuda()[None]
                         reasoning_mask_clip_embedding = clip_model.encode_image(reasoning_mask_tensor)
                         reasoning_mask_clip_embedding_norm = reasoning_mask_clip_embedding / reasoning_mask_clip_embedding.norm(dim=-1, keepdim=True)
                         torch.save(reasoning_mask_clip_embedding_norm, os.path.join(mask_clip_embeddings_save_path, f'{reasoning_prompt}.pt'))
+                        if args.clip_type == 'mask':
+                            clip_embedding = reasoning_mask_clip_embedding_norm
                         
-                        
-                        
-                        cur_clip_embeddings = gaussian.clip_embeddings[image_name].half()
-                        similarity_score = bounding_box_image_mask_clip_embedding_norm @ cur_clip_embeddings.T
-                        most_relevant_instance_index = similarity_score.argmax(-1)
-                        tmp_similarity_scores.append(similarity_score[:, most_relevant_instance_index].float())
-                        tmp_instance_indexs.append(most_relevant_instance_index)
+                        else:
+                            clip_embedding = reasoning_box_clip_embedding_norm
+                    cur_clip_embeddings = gaussian.clip_embeddings[image_name].half()
+                    similarity_score = clip_embedding @ cur_clip_embeddings.T
+                    most_relevant_instance_index = similarity_score.argmax(-1)
+                    tmp_similarity_scores.append(similarity_score[:, most_relevant_instance_index].float())
+                    tmp_instance_indexs.append(most_relevant_instance_index)
                 similarity_scores.append(tmp_similarity_scores)
                 instance_indexes.append(tmp_instance_indexs)
         similarity_scores = torch.tensor(similarity_scores).T
@@ -557,12 +558,12 @@ if __name__ == '__main__':
                 print('iou for classes:', IoUs[-1], 'mean iou:', np.mean(IoUs[-1]))
                 accuracies.append(accuracy_score(gt_seg, one_hot))
                 print('accuracy:', accuracies[-1])
-                Image.fromarray(segmentation_map).save(os.path.join(mask_map_save_path, 'segmentation_map.png'))
+                Image.fromarray(segmentation_map).save(os.path.join(mask_map_save_path, f'segmentation_map_{args.clip_type}_{args.train_views}.png'))
         metrics += f'{scene_name}\t{np.mean(IoUs)}\t{np.mean(accuracies)}\n'
         all_IoUs.append(np.mean(IoUs))
         all_accuracies.append(np.mean(accuracies))
     metrics += f'mean\t{np.mean(all_IoUs)}\t{np.mean(all_accuracies)}'
-    with open(f'ovs3d_{args.train_views}.txt', 'w') as f:
+    with open(f'ovs3d_{args.clip_type}_{args.train_views}.txt', 'w') as f:
         f.write(metrics)
                     # semantic_valid_num = [len(instance_embeddings)]
                     # masks_all_semantic, semantic_mask_map, semantic_object_map = text_semantic_segmentation(image_tensor, instance_embeddings, instance_feature, args.text_mask_threshold[j], semantic_valid_num)

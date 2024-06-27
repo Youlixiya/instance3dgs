@@ -16,7 +16,7 @@ def get_box_by_mask(mask):
     return top_left[1].item(), top_left[0].item(), bottom_right[1].item(), bottom_right[0].item()
 
 def qwen_template(prompt):
-    return f'Please grounding <ref> {prompt} </ref>'
+    return f'Output the bounding box of the object that best matches the text description, not the bounding box of an irrelevant object. Please grounding <ref> {prompt} </ref>'
 
 def extract_box(text, w, h):
     pattern = r'\((.*?)\)'
@@ -70,8 +70,8 @@ clip_model, _, _ = open_clip.create_model_and_transforms("ViT-B-16",
                                                         device='cuda:0')
 
 # 1st dialogue turn
-prompt = "what can be used to play games and is large and white"
-image_path = 'data/ovs3d/sofa/images_4/00.jpg'
+prompt = "what is green fruit"
+image_path = 'data/gsgrouping/figurines/images/frame_00001.jpg'
 query = tokenizer.from_list_format([
     {'image': image_path},
     {'text': qwen_template(prompt)},
